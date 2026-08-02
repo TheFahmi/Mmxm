@@ -22,7 +22,12 @@ services:
     env_file: .env
     depends_on: { postgres: {condition: service_healthy}, redis: {condition: service_healthy} }
     ports: ["3001:3001"]
-    command: node dist/main.js
+
+  migrate:
+    build: { context: ., dockerfile: packages/database/Dockerfile.migrate }
+    env_file: .env
+    depends_on: { postgres: {condition: service_healthy} }
+    restart: "no"
 
   worker:
     build: { context: ., dockerfile: apps/worker/Dockerfile }
