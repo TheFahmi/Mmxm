@@ -1,0 +1,468 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TerminalStatus {
+  ONLINE
+  DEGRADED
+  OFFLINE
+}
+
+enum Timeframe {
+  M1
+  M5
+  M15
+  H1
+  H4
+  D1
+}
+
+enum Direction {
+  LONG
+  SHORT
+}
+
+enum SignalStatus {
+  WATCHING
+  PRELIMINARY
+  CONFIRMED
+  ACTIVE
+  INVALIDATED
+  EXPIRED
+  TP1_HIT
+  TP2_HIT
+  COMPLETED
+  STOPPED
+}
+
+enum MmxmModel {
+  MARKET_MAKER_BUY_MODEL
+  MARKET_MAKER_SELL_MODEL
+}
+
+enum LiquidityState {
+  FRESH
+  TOUCHED
+  RAIDED
+  SWEPT
+  BROKEN
+  INVALIDATED
+}
+
+enum IngestionStatus {
+  ACCEPTED
+  DUPLICATE
+  REJECTED
+}
+
+enum NotificationChannel {
+  TELEGRAM
+  DISCORD
+  EMAIL
+  BROWSER
+  IN_APP
+  WEBHOOK
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum BacktestStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model Mql5Terminal {
+  id              String           @id @default(uuid())
+  terminalId      String           @unique
+  terminalName    String
+  terminalBuild   Int
+  brokerName      String
+  serverName      String
+  accountIdHash   String
+  canonicalSymbol String           @default("XAUUSD")
+  brokerSymbol    String
+  symbolMetadata  Json?
+  status          TerminalStatus   @default(OFFLINE)
+  lastHeartbeatAt DateTime?
+  createdAt       DateTime         @default(now())
+  connections     Mql5Connection[]
+  heartbeats      Mql5Heartbeat[]
+  candles         Candle[]
+  ingestionEvents IngestionEvent[]
+
+  @@map("mql5_terminals")
+}
+
+model Mql5Connection {
+  id             String       @id @default(uuid())
+  terminalDbId   String
+  terminal       Mql5Terminal @relation(fields: [terminalDbId], references: [id], onDelete: Cascade)
+  connectedAt    DateTime     @default(now())
+  disconnectedAt DateTime?
+  ip             String?
+
+  @@map("mql5_connections")
+}
+
+model Mql5Heartbeat {
+  id                   BigInt       @id @default(autoincrement())
+  terminalDbId         String
+  terminal             Mql5Terminal @relation(fields: [terminalDbId], references: [id], onDelete: Cascade)
+  terminalConnected    Boolean
+  tradeServerConnected Boolean
+  lastTickAt           DateTime?
+  pendingTickCount     Int          @default(0)
+  pendingCandleCount   Int          @default(0)
+  pendingSpoolCount    Int          @default(0)
+  memoryUsedMb         Int          @default(0)
+  serverTs             DateTime?
+  receivedAt           DateTime     @default(now())
+
+  @@index([terminalDbId, receivedAt(sort: Desc)])
+  @@map("mql5_heartbeats")
+}
+
+model SymbolMapping {
+  id              String   @id @default(uuid())
+  canonicalSymbol String   @default("XAUUSD")
+  brokerSymbol    String
+  brokerName      String
+  digits          Int
+  point           Decimal  @db.Decimal(20, 10)
+  tickSize        Decimal  @db.Decimal(20, 10)
+  tickValue       Decimal? @db.Decimal(20, 10)
+  contractSize    Decimal? @db.Decimal(20, 4)
+  minVolume       Decimal? @db.Decimal(20, 8)
+  maxVolume       Decimal? @db.Decimal(20, 4)
+  volumeStep      Decimal? @db.Decimal(20, 8)
+
+  @@unique([canonicalSymbol, brokerSymbol, brokerName])
+  @@map("symbol_mappings")
+}
+
+model Tick {
+  eventId         String   @id
+  terminalId      String
+  brokerSymbol    String
+  canonicalSymbol String   @default("XAUUSD")
+  brokerTsMs      BigInt
+  receivedAt      DateTime @default(now())
+  bid             Decimal  @db.Decimal(20, 8)
+  ask             Decimal  @db.Decimal(20, 8)
+  last            Decimal? @db.Decimal(20, 8)
+  volume          BigInt?
+  volumeReal      Decimal? @db.Decimal(24, 4)
+  flags           Int      @default(0)
+  spreadPoints    Int      @default(0)
+  sequence        Int      @default(0)
+
+  @@index([terminalId, brokerTsMs])
+  @@map("ticks")
+}
+
+model Candle {
+  id              String           @id @default(uuid())
+  terminalDbId    String
+  terminal        Mql5Terminal     @relation(fields: [terminalDbId], references: [id], onDelete: Cascade)
+  brokerSymbol    String
+  canonicalSymbol String           @default("XAUUSD")
+  timeframe       Timeframe
+  openTime        DateTime
+  closeTime       DateTime
+  open            Decimal          @db.Decimal(20, 8)
+  high            Decimal          @db.Decimal(20, 8)
+  low             Decimal          @db.Decimal(20, 8)
+  close           Decimal          @db.Decimal(20, 8)
+  tickVolume      BigInt           @default(0)
+  realVolume      Decimal?         @db.Decimal(24, 4)
+  spread          Int              @default(0)
+  isClosed        Boolean          @default(false)
+  revision        Int              @default(0)
+  source          String           @default("MQL5")
+  receivedAt      DateTime         @default(now())
+  revisions       CandleRevision[]
+
+  @@unique([terminalDbId, brokerSymbol, timeframe, openTime])
+  @@index([canonicalSymbol, timeframe, openTime(sort: Desc)])
+  @@map("candles")
+}
+
+model CandleRevision {
+  id        BigInt   @id @default(autoincrement())
+  candleId  String
+  candle    Candle   @relation(fields: [candleId], references: [id], onDelete: Cascade)
+  revision  Int
+  oldOhlc   Json
+  newOhlc   Json
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@map("candle_revisions")
+}
+
+model DataGapEvent {
+  id              String    @id @default(uuid())
+  canonicalSymbol String    @default("XAUUSD")
+  timeframe       Timeframe
+  gapStart        DateTime
+  gapEnd          DateTime
+  missingBars     Int
+  detectedAt      DateTime  @default(now())
+  resolvedAt      DateTime?
+
+  @@index([canonicalSymbol, timeframe, detectedAt(sort: Desc)])
+  @@map("data_gap_events")
+}
+
+model IngestionEvent {
+  id           BigInt          @id @default(autoincrement())
+  eventId      String?
+  endpoint     String
+  terminalDbId String?
+  terminal     Mql5Terminal?   @relation(fields: [terminalDbId], references: [id], onDelete: SetNull)
+  status       IngestionStatus
+  rejectReason String?
+  receivedAt   DateTime        @default(now())
+
+  @@index([eventId])
+  @@index([receivedAt(sort: Desc)])
+  @@map("ingestion_events")
+}
+
+model StrategyDefinition {
+  id          String            @id @default(uuid())
+  name        String            @unique
+  description String?
+  versions    StrategyVersion[]
+
+  @@map("strategy_definitions")
+}
+
+model StrategyVersion {
+  id         String             @id @default(uuid())
+  strategyId String
+  strategy   StrategyDefinition @relation(fields: [strategyId], references: [id], onDelete: Cascade)
+  version    String
+  config     Json
+  isActive   Boolean            @default(false)
+  createdAt  DateTime           @default(now())
+  signals    Signal[]
+  backtests  Backtest[]
+
+  @@unique([strategyId, version])
+  @@map("strategy_versions")
+}
+
+model MarketStructure {
+  id              String    @id @default(uuid())
+  canonicalSymbol String    @default("XAUUSD")
+  timeframe       Timeframe
+  kind            String // BOS CHOCH MSS
+  direction       String // BULLISH BEARISH
+  breakPrice      Decimal   @db.Decimal(20, 8)
+  pivotCandleId   String?
+  breakCandleId   String?
+  detectedAt      DateTime  @default(now())
+
+  @@index([canonicalSymbol, timeframe, detectedAt(sort: Desc)])
+  @@map("market_structures")
+}
+
+model LiquidityLevel {
+  id              String         @id @default(uuid())
+  canonicalSymbol String         @default("XAUUSD")
+  timeframe       Timeframe
+  type            String
+  price           Decimal        @db.Decimal(20, 8)
+  state           LiquidityState @default(FRESH)
+  detectedAt      DateTime       @default(now())
+  sweptAt         DateTime?
+  invalidatedAt   DateTime?
+
+  @@index([canonicalSymbol, timeframe, type, detectedAt(sort: Desc)])
+  @@map("liquidity_levels")
+}
+
+model FairValueGap {
+  id                String    @id @default(uuid())
+  canonicalSymbol   String    @default("XAUUSD")
+  timeframe         Timeframe
+  direction         Direction
+  low               Decimal   @db.Decimal(20, 8)
+  high              Decimal   @db.Decimal(20, 8)
+  mitigated         Boolean   @default(false)
+  formedAt          DateTime
+  evidenceCandleIds String[]
+
+  @@index([canonicalSymbol, timeframe, formedAt(sort: Desc)])
+  @@map("fair_value_gaps")
+}
+
+model OrderBlock {
+  id                String    @id @default(uuid())
+  canonicalSymbol   String    @default("XAUUSD")
+  timeframe         Timeframe
+  direction         Direction
+  low               Decimal   @db.Decimal(20, 8)
+  high              Decimal   @db.Decimal(20, 8)
+  mitigated         Boolean   @default(false)
+  formedAt          DateTime
+  evidenceCandleIds String[]
+
+  @@index([canonicalSymbol, timeframe, formedAt(sort: Desc)])
+  @@map("order_blocks")
+}
+
+model MmxmPattern {
+  id              String           @id @default(uuid())
+  canonicalSymbol String           @default("XAUUSD")
+  model           MmxmModel
+  stage           String
+  status          String           @default("ACTIVE")
+  startedAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  stages          MmxmStageEvent[]
+
+  @@map("mmxm_patterns")
+}
+
+model MmxmStageEvent {
+  id         String      @id @default(uuid())
+  patternId  String
+  pattern    MmxmPattern @relation(fields: [patternId], references: [id], onDelete: Cascade)
+  stage      String
+  evidence   Json?
+  detectedAt DateTime    @default(now())
+
+  @@index([patternId, detectedAt])
+  @@map("mmxm_stage_events")
+}
+
+model Signal {
+  id                String          @id @default(uuid())
+  canonicalSymbol   String          @default("XAUUSD")
+  direction         Direction
+  status            SignalStatus    @default(WATCHING)
+  mmxmModel         MmxmModel
+  entryMin          Decimal         @db.Decimal(20, 8)
+  entryMax          Decimal         @db.Decimal(20, 8)
+  preferredEntry    Decimal         @db.Decimal(20, 8)
+  stopLoss          Decimal         @db.Decimal(20, 8)
+  takeProfits       Json
+  riskReward        Decimal         @db.Decimal(10, 2)
+  confidence        Int
+  htfBias           String
+  setupTf           String          @default("M15")
+  confirmationTf    String          @default("M5")
+  precisionTf       String          @default("M1")
+  invalidationRules Json
+  strategyVersionId String
+  strategyVersion   StrategyVersion @relation(fields: [strategyVersionId], references: [id])
+  detectedAt        DateTime        @default(now())
+  confirmedAt       DateTime?
+  expiresAt         DateTime
+  reasons           SignalReason[]
+  events            SignalEvent[]
+  notifications     Notification[]
+
+  @@index([canonicalSymbol, status, detectedAt(sort: Desc)])
+  @@map("signals")
+}
+
+model SignalReason {
+  id                String   @id @default(uuid())
+  signalId          String
+  signal            Signal   @relation(fields: [signalId], references: [id], onDelete: Cascade)
+  code              String
+  description       String
+  evidenceCandleIds String[]
+  weight            Decimal  @db.Decimal(5, 2)
+
+  @@index([signalId])
+  @@map("signal_reasons")
+}
+
+model SignalEvent {
+  id         String   @id @default(uuid())
+  signalId   String
+  signal     Signal   @relation(fields: [signalId], references: [id], onDelete: Cascade)
+  fromStatus String
+  toStatus   String
+  payload    Json?
+  createdAt  DateTime @default(now())
+
+  @@index([signalId, createdAt])
+  @@map("signal_events")
+}
+
+model Notification {
+  id        String              @id @default(uuid())
+  signalId  String?
+  signal    Signal?             @relation(fields: [signalId], references: [id], onDelete: SetNull)
+  channel   NotificationChannel
+  status    NotificationStatus  @default(PENDING)
+  body      String
+  error     String?
+  sentAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  @@index([status, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model Backtest {
+  id                String          @id @default(uuid())
+  strategyVersionId String
+  strategyVersion   StrategyVersion @relation(fields: [strategyVersionId], references: [id])
+  canonicalSymbol   String          @default("XAUUSD")
+  fromTs            DateTime
+  toTs              DateTime
+  params            Json
+  summary           Json?
+  status            BacktestStatus  @default(QUEUED)
+  error             String?
+  createdAt         DateTime        @default(now())
+  finishedAt        DateTime?
+  trades            BacktestTrade[]
+
+  @@map("backtests")
+}
+
+model BacktestTrade {
+  id           String    @id @default(uuid())
+  backtestId   String
+  backtest     Backtest  @relation(fields: [backtestId], references: [id], onDelete: Cascade)
+  direction    Direction
+  entryPrice   Decimal   @db.Decimal(20, 8)
+  exitPrice    Decimal?  @db.Decimal(20, 8)
+  pnl          Decimal?  @db.Decimal(20, 4)
+  exitReason   String?
+  ruleEvidence Json?
+  enteredAt    DateTime
+  exitedAt     DateTime?
+
+  @@index([backtestId, enteredAt])
+  @@map("backtest_trades")
+}
+
+model AuditLog {
+  id        BigInt   @id @default(autoincrement())
+  actor     String
+  action    String
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_logs")
+}

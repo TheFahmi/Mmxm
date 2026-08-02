@@ -1,0 +1,14 @@
+{
+  "name": "mmxm-xauusd",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "dev:api": "pnpm --filter @mmxm/api dev",
+    "dev:web": "pnpm --filter @mmxm/web dev",
+    "dev:worker": "pnpm --filter @mmxm/worker dev"
+  },
+  "devDependencies": { "turbo": "^2.1.0", "typescript": "^5.6.0" }
+}

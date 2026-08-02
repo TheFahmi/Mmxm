@@ -1,0 +1,40 @@
+name: mmxm-xauusd
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mmxm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: mmxm
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ["CMD-SHELL","pg_isready -U mmxm"], interval: 5s, timeout: 3s, retries: 20 }
+    ports: ["5432:5432"]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes: [redisdata:/data]
+    healthcheck: { test: ["CMD","redis-cli","ping"], interval: 5s, timeout: 3s, retries: 20 }
+    ports: ["6379:6379"]
+
+  api:
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    env_file: .env
+    depends_on: { postgres: {condition: service_healthy}, redis: {condition: service_healthy} }
+    ports: ["3001:3001"]
+    command: node dist/main.js
+
+  worker:
+    build: { context: ., dockerfile: apps/worker/Dockerfile }
+    env_file: .env
+    depends_on: { postgres: {condition: service_healthy}, redis: {condition: service_healthy} }
+
+  web:
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    env_file: .env
+    depends_on: [api]
+    ports: ["3000:3000"]
+
+volumes:
+  pgdata:
+  redisdata:
