@@ -7,11 +7,11 @@ import { StatusBadge } from '@/components/ui';
 
 interface StrategyVersion {
   id: string;
-  version: number;
-  status: string;
-  activatedAt: string | null;
+  version: string;
+  isActive: boolean;
+  createdAt: string;
   config: Record<string, unknown>;
-  strategy: { key: string; name: string };
+  strategy: { name: string; description: string | null };
 }
 
 export default function StrategyPage() {
@@ -29,12 +29,10 @@ export default function StrategyPage() {
           <section key={v.id} className="rounded-lg border border-border p-4">
             <div className="flex items-center gap-3 mb-3">
               <h2 className="font-semibold">{v.strategy.name} — v{v.version}</h2>
-              <StatusBadge status={v.status} />
-              {v.activatedAt && (
-                <span className="text-xs text-muted-foreground">
-                  activated {new Date(v.activatedAt).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })}
-                </span>
-              )}
+              <StatusBadge status={v.isActive ? 'ACTIVE' : 'INACTIVE'} />
+              <span className="text-xs text-muted-foreground">
+                created {new Date(v.createdAt).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })}
+              </span>
             </div>
             <pre className="text-xs bg-muted/60 rounded p-3 overflow-x-auto">
               {JSON.stringify(v.config, null, 2)}

@@ -1,0 +1,25 @@
+{
+  "name": "@mmxm/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mmxm/database": "workspace:*",
+    "@mmxm/trading-core": "workspace:*",
+    "@mmxm/types": "workspace:*",
+    "bullmq": "^5.21.0",
+    "ioredis": "^5.4.0",
+    "pino": "^9.4.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -8,11 +8,12 @@ import { useState } from 'react';
 
 interface Backtest {
   id: string;
-  name: string;
   status: string;
-  rangeStart: string;
-  rangeEnd: string;
-  resultSummary: { totalSignals?: number; winRate?: number; avgRR?: number } | null;
+  fromTs: string;
+  toTs: string;
+  params: { name?: string } | null;
+  summary: { totalSignals?: number; winRate?: number | null; avgRR?: number | null } | null;
+  _count?: { trades: number };
   createdAt: string;
 }
 
@@ -67,16 +68,16 @@ export default function BacktestsPage() {
             <tbody>
               {(data ?? []).map(b => (
                 <tr key={b.id} className="border-t border-border">
-                  <td className="px-3 py-2">{b.name}</td>
+                  <td className="px-3 py-2">{b.params?.name ?? b.id.slice(0, 8)}</td>
                   <td className="px-3 py-2 text-muted-foreground tabular-nums">
-                    {new Date(b.rangeStart).toLocaleDateString('id-ID')} — {new Date(b.rangeEnd).toLocaleDateString('id-ID')}
+                    {new Date(b.fromTs).toLocaleDateString('id-ID')} — {new Date(b.toTs).toLocaleDateString('id-ID')}
                   </td>
                   <td className="px-3 py-2"><StatusBadge status={b.status} /></td>
-                  <td className="px-3 py-2 text-right tabular-nums">{b.resultSummary?.totalSignals ?? '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{b.summary?.totalSignals ?? b._count?.trades ?? '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    {b.resultSummary?.winRate != null ? `${(b.resultSummary.winRate * 100).toFixed(1)}%` : '—'}
+                    {b.summary?.winRate != null ? `${(b.summary.winRate * 100).toFixed(1)}%` : '—'}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums">{b.resultSummary?.avgRR?.toFixed(2) ?? '—'}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{b.summary?.avgRR?.toFixed(2) ?? '—'}</td>
                 </tr>
               ))}
               {data?.length === 0 && (
