@@ -6,9 +6,11 @@ import { RedisModule } from './common/redis.module';
 import { Mql5GatewayModule } from './modules/mql5-gateway/mql5-gateway.module';
 import { Mql5TerminalModule } from './modules/mql5-terminal/mql5-terminal.module';
 import { HealthModule } from './modules/health/health.module';
+import { MarketDataModule } from './modules/market-data/market-data.module';
 import { WebsocketModule } from './modules/websocket/websocket.module';
 import { SignalModule } from './modules/signal/signal.module';
 import { BacktestModule } from './modules/backtest/backtest.module';
+import { StrategyModule } from './modules/strategy/strategy.module';
 
 @Module({
   imports: [
@@ -30,9 +32,11 @@ import { BacktestModule } from './modules/backtest/backtest.module';
     Mql5GatewayModule,
     Mql5TerminalModule,
     HealthModule,
+    MarketDataModule,
     WebsocketModule,
     SignalModule,
     BacktestModule,
+    StrategyModule,
   ],
 })
 export class AppModule {}
