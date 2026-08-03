@@ -161,10 +161,10 @@ string MmxmNewUuid()
       if(i==7||i==11||i==15||i==19) s += "-";
    }
    // set version 4 + variant
-   s = StringSetCharacter(s, 12, '4');
+   StringSetCharacter(s, 12, '4');
    int v = 8 + MathRand()%4; // 8,9,a,b
    string vs = StringFormat("%x", v);
-   s = s.Substr(0,16) + vs + s.Substr(17);
+   s = StringSubstr(s, 0, 16) + vs + StringSubstr(s, 17);
    return s;
 }
 
