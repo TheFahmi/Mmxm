@@ -8,20 +8,18 @@ services:
       POSTGRES_DB: mmxm
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck: { test: ["CMD-SHELL","pg_isready -U mmxm"], interval: 5s, timeout: 3s, retries: 20 }
-    ports: ["5432:5432"]
 
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
     volumes: [redisdata:/data]
     healthcheck: { test: ["CMD","redis-cli","ping"], interval: 5s, timeout: 3s, retries: 20 }
-    ports: ["6379:6379"]
 
   api:
     build: { context: ., dockerfile: apps/api/Dockerfile }
     env_file: .env
     depends_on: { postgres: {condition: service_healthy}, redis: {condition: service_healthy} }
-    ports: ["3001:3001"]
+    ports: ["127.0.0.1:8902:3001"]
 
   migrate:
     build: { context: ., dockerfile: packages/database/Dockerfile.migrate }
@@ -38,7 +36,7 @@ services:
     build: { context: ., dockerfile: apps/web/Dockerfile }
     env_file: .env
     depends_on: [api]
-    ports: ["3000:3000"]
+    ports: ["127.0.0.1:8901:3000"]
 
 volumes:
   pgdata:
