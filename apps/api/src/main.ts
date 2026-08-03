@@ -17,14 +17,6 @@ async function bootstrap() {
   );
   app.useLogger(app.get(Logger));
 
-  const fastify = app.getHttpAdapter().getInstance() as any;
-  fastify.addHook('preParsing', async (req: any, _reply: any, payload: any) => {
-    const chunks: Buffer[] = [];
-    for await (const chunk of payload) chunks.push(Buffer.from(chunk));
-    req.rawBody = Buffer.concat(chunks);
-    return Buffer.concat(chunks);
-  });
-
   app.setGlobalPrefix('api/v1');
   app.enableCors({ origin: env.CORS_ORIGIN?.split(',') ?? true, credentials: true });
   app.enableShutdownHooks();

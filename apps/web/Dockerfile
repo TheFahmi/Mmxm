@@ -9,6 +9,10 @@ COPY packages/types/package.json packages/types/
 RUN pnpm install --frozen-lockfile --filter @mmxm/web...
 
 FROM deps AS build
+ARG NEXT_PUBLIC_API_URL=https://trade.mfah.me
+ARG NEXT_PUBLIC_WS_URL=https://trade.mfah.me
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ENV NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
 COPY packages/types packages/types
 COPY apps/web apps/web
 ENV NEXT_TELEMETRY_DISABLED=1

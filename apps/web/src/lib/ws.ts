@@ -13,7 +13,6 @@ export function useWsEvent<T>(event: string, onMessage: (data: T) => void) {
 
   useEffect(() => {
     const socket: Socket = io(WS, {
-      path: '/ws',
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,

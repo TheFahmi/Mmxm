@@ -7,7 +7,7 @@ import Redis from 'ioredis';
 import { REDIS } from '../../common/redis.module';
 import { env } from '../../config/env';
 
-@WebSocketGateway({ cors: { origin: true, credentials: true }, path: '/ws' })
+@WebSocketGateway({ cors: { origin: true, credentials: true } })
 export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnModuleDestroy {
   @WebSocketServer() server!: Server;
   private readonly log = new Logger(EventsGateway.name);
