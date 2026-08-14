@@ -18,6 +18,14 @@ export class HealthController {
     try { await this.redis.ping(); checks.redis = 'ok'; }
     catch { checks.redis = 'fail'; }
     const ok = Object.values(checks).every(v => v === 'ok');
-    return { success: ok, data: checks };
+    // expose status/db aliases alongside api/postgres for the web dashboard
+    return {
+      success: ok,
+      data: {
+        ...checks,
+        status: checks.api,
+        db: checks.postgres,
+      },
+    };
   }
 }

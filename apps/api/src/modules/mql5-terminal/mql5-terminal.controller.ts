@@ -20,7 +20,20 @@ export class Mql5TerminalController {
       data: terminals.map(t => {
         const ageSec = t.lastHeartbeatAt ? (now - t.lastHeartbeatAt.getTime()) / 1000 : Infinity;
         const status = ageSec < 15 ? 'ONLINE' : ageSec <= 30 ? 'DEGRADED' : 'OFFLINE';
-        return { ...t, computedStatus: status, heartbeatAgeSeconds: ageSec };
+        const meta: Record<string, unknown> = (t.symbolMetadata as Record<string, unknown>) ?? {};
+        return {
+          ...t,
+          computedStatus: status,
+          heartbeatAgeSeconds: ageSec,
+          digits: meta.digits ?? null,
+          point: meta.point ?? null,
+          tickSize: meta.tickSize ?? null,
+          tickValue: meta.tickValue ?? null,
+          contractSize: meta.contractSize ?? null,
+          minimumVolume: meta.minimumVolume ?? null,
+          maximumVolume: meta.maximumVolume ?? null,
+          volumeStep: meta.volumeStep ?? null,
+        };
       }),
     };
   }

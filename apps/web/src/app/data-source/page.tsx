@@ -9,6 +9,7 @@ interface Terminal {
   id: string;
   terminalId: string;
   terminalName: string;
+  terminalBuild: number;
   brokerName: string;
   serverName: string;
   brokerSymbol: string;
@@ -64,7 +65,7 @@ export default function DataSourcePage() {
               <div><dt className="text-muted-foreground">Digits</dt><dd className="tabular-nums">{t.digits}</dd></div>
               <div><dt className="text-muted-foreground">Contract Size</dt>
                 <dd className="tabular-nums">{Number(t.contractSize)}</dd></div>
-              <div><dt className="text-muted-foreground">EA Version</dt><dd>{t.eaVersion ?? '—'}</dd></div>
+              <div><dt className="text-muted-foreground">EA Version</dt><dd>{t.terminalBuild ? `build ${t.terminalBuild}` : '—'}</dd></div>
               <div><dt className="text-muted-foreground">Last Heartbeat</dt>
                 <dd>{t.lastHeartbeatAt ? new Date(t.lastHeartbeatAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) : 'never'}</dd></div>
             </dl>

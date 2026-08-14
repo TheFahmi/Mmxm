@@ -67,6 +67,7 @@ export class IngestionService {
         bid: latest.bid,
         ask: latest.ask,
         last: latest.last,
+        spreadPoints: latest.spreadPoints,
         brokerTimestampMs: latest.brokerTimestampMs,
       }));
     }
