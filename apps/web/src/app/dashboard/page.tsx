@@ -29,12 +29,14 @@ interface SignalRow {
   detectedAt: string;
 }
 
+type SignalListResponse = { items: SignalRow[] };
+
 export default function DashboardPage() {
   const { bid, ask, spreadPoints, lastTickAt } = useMarketStore();
   const setTick = useMarketStore(s => s.setTick);
 
   const wsConnected = useWsEvent<{ bid: number; ask: number; spreadPoints: number; brokerTimestampMs: number }>(
-    'xauusd.tick.updated', (t) => setTick(t),
+    'xauusd.tick', (t) => setTick(t),
   );
 
   const { data: terminals } = useQuery({
@@ -42,11 +44,12 @@ export default function DashboardPage() {
     queryFn: () => apiGet<Terminal[]>('/terminals'),
     refetchInterval: 10_000,
   });
-  const { data: signals } = useQuery({
+  const { data: signalsData } = useQuery<SignalListResponse>({
     queryKey: ['signals', 'latest'],
-    queryFn: () => apiGet<{ items: SignalRow[] }>('/signals?limit=5'),
+    queryFn: () => apiGet<SignalListResponse>('/signals?limit=5'),
     refetchInterval: 15_000,
   });
+  const signals = signalsData?.items ?? [];
 
   const t = terminals?.[0];
 
@@ -89,7 +92,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {(signals?.items ?? []).map(s => (
+                {signals.map(s => (
                   <tr key={s.id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-3 py-2">
                       <Link href={`/signals/${s.id}`} className="hover:underline">
@@ -103,7 +106,7 @@ export default function DashboardPage() {
                     <td className="px-3 py-2 text-right tabular-nums">{s.confidence}</td>
                   </tr>
                 ))}
-                {signals?.items.length === 0 && (
+                {signals.length === 0 && (
                   <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">No signals yet.</td></tr>
                 )}
               </tbody>

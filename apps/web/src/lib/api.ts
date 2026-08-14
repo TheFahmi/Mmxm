@@ -1,4 +1,4 @@
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const API = process.env.NEXT_PUBLIC_API_URL ?? 'https://trade.mfah.me';
 
 export async function apiGet<T>(path: string): Promise<T> {
   const r = await fetch(`${API}/api/v1${path}`, { cache: 'no-store' });

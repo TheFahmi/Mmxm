@@ -52,7 +52,8 @@ export class Mql5SignatureGuard implements CanActivate {
       throw new UnauthorizedException({ code: 'NONCE_REUSED' });
     }
 
-    const raw = req.rawBody?.toString('utf8') ?? '';
+    // rawBody not available (parser skip) — EA produces deterministic JSON, so reserialize
+    const raw = req.rawBody?.toString('utf8') ?? JSON.stringify(req.body ?? {});
     const expected = createHmac('sha256', env.MQL5_API_SECRET)
       .update(`${timestamp}.${nonce}.${raw}`)
       .digest('hex');

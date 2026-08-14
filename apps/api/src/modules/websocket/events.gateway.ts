@@ -38,7 +38,7 @@ export class EventsGateway implements OnGatewayInit, OnGatewayConnection, OnModu
     ];
     this.sub.subscribe(...channels).catch(e => this.log.error('subscribe failed', e));
     this.sub.on('message', (channel, message) => {
-      const event = channel.replace('mmxm:pub:', 'xauusd.').replace(/:/g, '.');
+      const event = channel.replace('mmxm:pub:', 'xauusd.');
       this.server.emit(event, JSON.parse(message));
     });
     this.log.log('WS gateway ready');

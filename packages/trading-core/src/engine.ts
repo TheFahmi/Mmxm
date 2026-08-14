@@ -1,9 +1,9 @@
 import type { Candle, DealingRange, MmxmAnalysisInput, MmxmModel, XauusdSignal, SignalReason, InvalidationRule } from '@mmxm/types';
-import { atr, body, range, closedOnly, isBullish } from './measure';
-import { findPivots } from './pivots';
-import { detectStructure } from './structure';
-import { detectFvgs, detectOrderBlocks, fvgContains, obContains } from './zones';
-import { pivotsToLiquidity, classifyLevelInteraction, detectPrevDayWeekLevels, detectSessionLevels } from './liquidity';
+import { atr, body, range, closedOnly, isBullish } from './measure.js';
+import { findPivots } from './pivots.js';
+import { detectStructure } from './structure.js';
+import { detectFvgs, detectOrderBlocks, fvgContains, obContains } from './zones.js';
+import { pivotsToLiquidity, classifyLevelInteraction, detectPrevDayWeekLevels, detectSessionLevels } from './liquidity.js';
 
 export interface EngineOutput {
   signal: XauusdSignal | null;

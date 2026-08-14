@@ -18,17 +18,13 @@ async function bootstrap() {
     { bufferLogs: true },
   );
   app.useLogger(app.get(Logger));
+  process.on('uncaughtException', err => { console.error('uncaught', err); process.exit(1); });
+  process.on('unhandledRejection', r => { console.error('unhandled', r); process.exit(1); });
 
-  // raw body needed for signature check on ingestion routes
-  const fastify = app.getHttpAdapter().getInstance();
-  fastify.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
-    (req as unknown as { rawBody: Buffer }).rawBody = body as Buffer;
-    try {
-      done(null, JSON.parse((body as Buffer).toString('utf8') || '{}'));
-    } catch (err) {
-      done(err as Error, undefined);
-    }
-  });
+  // Raw body note: Nest/Fastify re-registers application/json parser after
+  // removeContentTypeParser, so overriding it throws FST_ERR_CTP_ALREADY_PRESENT.
+  // HMAC signs JSON.stringify(req.body) — the MQL5 EA must emit canonical JSON with
+  // no trailing-zero floats (MmxmJsonNum trims to shortest repr) so both sides match.
 
   app.setGlobalPrefix('api/v1');
   app.enableCors({ origin: env.CORS_ORIGIN?.split(',') ?? true, credentials: true });

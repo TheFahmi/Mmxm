@@ -1,10 +1,10 @@
 import { PrismaClient } from '@mmxm/database';
 import { Worker, Queue, type Job } from 'bullmq';
 import IORedis from 'ioredis';
-import { env } from './env';
-import { logger } from './logger';
-import { runAnalysis } from './analyzer';
-import { runBacktest } from './backtest-runner';
+import { env } from './env.js';
+import { logger } from './logger.js';
+import { runAnalysis } from './analyzer.js';
+import { runBacktest } from './backtest-runner.js';
 
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
 const prisma = new PrismaClient();

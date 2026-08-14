@@ -1,9 +1,9 @@
 import { PrismaClient } from '@mmxm/database';
 import { analyze } from '@mmxm/trading-core';
 import { DEFAULT_STRATEGY_CONFIG, type MmxmStrategyConfig, type Timeframe, type Candle } from '@mmxm/types';
-import { loadCandleRange } from './candles';
-import { env } from './env';
-import { logger } from './logger';
+import { loadCandleRange } from './candles.js';
+import { env } from './env.js';
+import { logger } from './logger.js';
 
 /**
  * Replay historical candles through the engine — walk-forward, no lookahead:

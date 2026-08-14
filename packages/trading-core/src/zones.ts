@@ -1,5 +1,5 @@
 import type { Candle, Fvg, OrderBlock } from '@mmxm/types';
-import { isBullish, isBearish, range } from './measure';
+import { isBullish, isBearish, range } from './measure.js';
 
 /**
  * Fair Value Gap: 3-candle imbalance. Bullish FVG at i if

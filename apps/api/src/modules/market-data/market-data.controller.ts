@@ -27,14 +27,40 @@ export class MarketDataController {
     // dedupe by openTime (highest revision last in asc order) — keep latest revision
     const byTime = new Map<string, (typeof rows)[number]>();
     for (const r of rows) byTime.set(r.openTime.toISOString(), r);
-    return [...byTime.values()];
+    const data = [...byTime.values()].map(r => ({
+      id: r.id,
+      canonicalSymbol: r.canonicalSymbol,
+      timeframe: r.timeframe,
+      openTime: r.openTime,
+      open: r.open,
+      high: r.high,
+      low: r.low,
+      close: r.close,
+      tickVolume: Number(r.tickVolume),
+      realVolume: r.realVolume != null ? Number(r.realVolume) : null,
+      spread: Number(r.spread),
+      revision: Number(r.revision),
+      receivedAt: r.receivedAt,
+    }));
+    return { success: true, data };
   }
 
   @Get('ticks/latest')
   async latestTick() {
-    return this.prisma.tick.findFirst({
+    const t = await this.prisma.tick.findFirst({
       where: { canonicalSymbol: 'XAUUSD' },
       orderBy: { brokerTsMs: 'desc' },
     });
+    if (!t) return { success: true, data: null };
+    return {
+      success: true,
+      data: {
+        bid: Number(t.bid),
+        ask: Number(t.ask),
+        spreadPoints: t.spreadPoints,
+        brokerTimestampMs: Number(t.brokerTsMs),
+        receivedAt: t.receivedAt.toISOString(),
+      },
+    };
   }
 }

@@ -1,6 +1,6 @@
 import type { XauusdSignal } from '@mmxm/types';
-import { env } from './env';
-import { logger } from './logger';
+import { env } from './env.js';
+import { logger } from './logger.js';
 
 /** Fire-and-forget signal notifications. Never throws. */
 export async function notifySignal(signalId: string, sig: XauusdSignal): Promise<void> {

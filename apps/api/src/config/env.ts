@@ -10,8 +10,8 @@ const schema = z.object({
   MQL5_TIMESTAMP_SKEW_SECONDS: z.coerce.number().default(30),
   MQL5_NONCE_TTL_SECONDS: z.coerce.number().default(60),
   MQL5_MAX_PAYLOAD_BYTES: z.coerce.number().default(1_048_576),
-  TRADING_EXECUTION_ENABLED: z.coerce.boolean().default(false),
-  SIGNAL_ONLY_MODE: z.coerce.boolean().default(true),
+  TRADING_EXECUTION_ENABLED: z.enum(['true','false']).default('false').transform(v => v === 'true'),
+  SIGNAL_ONLY_MODE: z.enum(['true','false']).default('true').transform(v => v === 'true'),
   CORS_ORIGIN: z.string().optional(),
   LOG_LEVEL: z.string().default('info'),
 });

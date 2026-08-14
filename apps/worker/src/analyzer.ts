@@ -2,10 +2,10 @@ import { PrismaClient } from '@mmxm/database';
 import { analyze } from '@mmxm/trading-core';
 import { DEFAULT_STRATEGY_CONFIG, type MmxmStrategyConfig, type XauusdSignal } from '@mmxm/types';
 import { createHash } from 'node:crypto';
-import { env } from './env';
-import { loadCandles } from './candles';
-import { logger } from './logger';
-import { notifySignal } from './notify';
+import { env } from './env.js';
+import { loadCandles } from './candles.js';
+import { logger } from './logger.js';
+import { notifySignal } from './notify.js';
 
 /** Load active strategy config (falls back to defaults). */
 async function loadActiveConfig(prisma: PrismaClient) {

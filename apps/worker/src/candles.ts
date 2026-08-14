@@ -4,6 +4,9 @@ import { TIMEFRAMES } from '@mmxm/types';
 
 const TF_ORDER: Timeframe[] = [...TIMEFRAMES];
 
+// Server-side lookback — prevents ancient data from polluting dealing range / ATR
+const LOOKBACK_DAYS: Partial<Record<Timeframe, number>> = { M15: 7, M5: 3, M1: 1, H1: 30, H4: 90, D1: 180 };
+
 /** Load recent candles per timeframe, mapped to engine Candle shape. */
 export async function loadCandles(
   prisma: PrismaClient,
@@ -13,8 +16,14 @@ export async function loadCandles(
   for (const tf of TF_ORDER) {
     const limit = limits[tf];
     if (!limit) continue;
+    const lookback = LOOKBACK_DAYS[tf] ?? 30;
+    const where: Record<string, unknown> = {
+      canonicalSymbol: 'XAUUSD',
+      timeframe: tf as DbTimeframe,
+      openTime: { gte: new Date(Date.now() - lookback * 86400_000) },
+    };
     const rows: DbCandle[] = await prisma.candle.findMany({
-      where: { canonicalSymbol: 'XAUUSD', timeframe: tf as DbTimeframe },
+      where,
       orderBy: { openTime: 'desc' },
       take: limit,
     });

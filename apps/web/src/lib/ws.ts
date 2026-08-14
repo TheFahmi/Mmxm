@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
-const WS = process.env.NEXT_PUBLIC_WS_URL ?? 'http://localhost:3001';
+const WS = process.env.NEXT_PUBLIC_WS_URL ?? 'https://trade.mfah.me';
 
 /** Subscribe to a WS event; auto-reconnect with REST fallback flag. */
 export function useWsEvent<T>(event: string, onMessage: (data: T) => void) {

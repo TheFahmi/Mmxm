@@ -1,5 +1,5 @@
 import type { Candle, LiquidityLevel, LiquidityType, Pivot } from '@mmxm/types';
-import { findEqualLevels } from './pivots';
+import { findEqualLevels } from './pivots.js';
 
 /** Session windows in UTC hours (DST-safe: computed on real UTC clock). */
 const SESSIONS: Array<{ type: LiquidityType[]; startUtcHour: number; endUtcHour: number }> = [

@@ -20,11 +20,29 @@ string MmxmJsonStr(const string key, const string val)
    return StringFormat("\"%s\":\"%s\"", key, MmxmJsonEscape(val));
 }
 
+// Shortest-round-trip float: DoubleToString emits trailing zeros (e.g. 2914.32000000)
+// which differ from JSON.stringify's normalized form -> HMAC mismatch. Trim them.
+string MmxmTrimNum(const string s)
+{
+   string r = s;
+   int dot = StringFind(r, ".");
+   if(dot >= 0)
+   {
+      // strip trailing zeros
+      while(StringLen(r) > dot + 1 && StringGetCharacter(r, StringLen(r)-1) == '0')
+         r = StringSubstr(r, 0, StringLen(r)-1);
+      // strip trailing dot if all zeros
+      if(StringGetCharacter(r, StringLen(r)-1) == '.')
+         r = StringSubstr(r, 0, StringLen(r)-1);
+   }
+   return r;
+}
+
 string MmxmJsonNum(const string key, const double val, const int digits = -1)
 {
    if(digits >= 0)
-      return StringFormat("\"%s\":%s", key, DoubleToString(val, digits));
-   return StringFormat("\"%s\":%s", key, DoubleToString(val, 8));
+      return StringFormat("\"%s\":%s", key, MmxmTrimNum(DoubleToString(val, digits)));
+   return StringFormat("\"%s\":%s", key, MmxmTrimNum(DoubleToString(val, 8)));
 }
 
 string MmxmJsonInt(const string key, const long val)
