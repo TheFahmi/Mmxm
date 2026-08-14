@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api';
 import { useWsEvent } from '@/lib/ws';
@@ -38,6 +39,17 @@ export default function DashboardPage() {
   const wsConnected = useWsEvent<{ bid: number; ask: number; spreadPoints: number; brokerTimestampMs: number }>(
     'xauusd.tick', (t) => setTick(t),
   );
+
+  // Fallback: poll latest tick from DB so Bid/Ask/Spread always show the last known
+  // price even when WS events are idle (EA quiet / market slow).
+  const { data: latestTick } = useQuery({
+    queryKey: ['tick', 'latest'],
+    queryFn: () => apiGet<{ bid: number; ask: number; spreadPoints: number; brokerTimestampMs: number }>('/market-data/ticks/latest'),
+    refetchInterval: 1000,
+  });
+  useEffect(() => {
+    if (latestTick && latestTick.bid != null) setTick(latestTick);
+  }, [latestTick, setTick]);
 
   const { data: terminals } = useQuery({
     queryKey: ['terminals'],
