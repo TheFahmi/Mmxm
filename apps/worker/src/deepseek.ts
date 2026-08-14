@@ -8,6 +8,88 @@ import { logger } from './logger.js';
  * caught and logged, signal is kept regardless.
  */
 
+export interface LlmSignal {
+  direction: 'LONG' | 'SHORT' | 'NONE';
+  entry: number;
+  stopLoss: number;
+  takeProfits: number[];
+  confidence: number;
+  mmxmModel: string;
+  htfBias: string;
+  reasons: { code: string; description: string; weight: number }[];
+  summary: string;
+}
+
+/**
+ * LLM-first signal detection: DeepSeek analyzes recent candles and returns a
+ * structured trade setup (or NONE). Used when the rule engine finds nothing
+ * (e.g. sparse data). Never blocks the loop — returns null on any failure.
+ */
+export async function detectSignalWithLlm(
+  recentCandles: { open: number; high: number; low: number; close: number; openTime: string }[],
+  currentPrice: number,
+): Promise<LlmSignal | null> {
+  if (!env.DEEPSEEK_ENABLED) return null;
+
+  const system = `You are a senior XAUUSD ICT/MMXM signal analyst. Analyze the given M15 candles and return STRICT JSON only, NO extra text:
+{
+  "direction": "LONG" | "SHORT" | "NONE",
+  "entry": number,
+  "stopLoss": number,
+  "takeProfits": [number],
+  "confidence": 0-100,
+  "mmxmModel": "MARKET_MAKER_BUY_MODEL" | "MARKET_MAKER_SELL_MODEL",
+  "htfBias": "BULLISH" | "BEARISH" | "NEUTRAL",
+  "reasons": [{"code": string, "description": string, "weight": number}],
+  "summary": string
+}
+If no valid setup, return {"direction":"NONE", ...empty}. Entry/SL/TP must be real prices near current price. Max 4 take profits.`;
+
+  const user = JSON.stringify({
+    candles: recentCandles,
+    currentPrice,
+  });
+
+  const body = {
+    model: env.DEEPSEEK_MODEL,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    max_tokens: 3000,
+    temperature: 0.1,
+  };
+
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), env.DEEPSEEK_TIMEOUT_MS);
+    const res = await fetch(`${env.DEEPSEEK_BASE_URL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${env.DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!res.ok) {
+      logger.warn({ status: res.status }, 'llm detect failed');
+      return null;
+    }
+    const data = (await res.json()) as { choices: { message: { content?: string } }[] };
+    const content = data.choices?.[0]?.message?.content ?? '';
+    if (!content) return null;
+    const cleaned = content.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleaned) as LlmSignal;
+    if (!parsed.direction) return null;
+    return parsed;
+  } catch (e) {
+    logger.warn({ err: e instanceof Error ? e.message : String(e) }, 'llm detect error');
+    return null;
+  }
+}
+
 export interface LlmInsight {
   verdict: 'AGREE' | 'DISAGREE' | 'NEUTRAL';
   summary: string;

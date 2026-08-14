@@ -1,12 +1,12 @@
 import { PrismaClient } from '@mmxm/database';
 import { analyze } from '@mmxm/trading-core';
-import { DEFAULT_STRATEGY_CONFIG, type MmxmStrategyConfig, type XauusdSignal } from '@mmxm/types';
+import { DEFAULT_STRATEGY_CONFIG, type MmxmStrategyConfig, type XauusdSignal, type Direction, type MmxmModel, type Bias } from '@mmxm/types';
 import { createHash } from 'node:crypto';
 import { env } from './env.js';
 import { loadCandles } from './candles.js';
 import { logger } from './logger.js';
 import { notifySignal } from './notify.js';
-import { verifySignalWithLlm } from './deepseek.js';
+import { verifySignalWithLlm, detectSignalWithLlm } from './deepseek.js';
 
 /** Load active strategy config (falls back to defaults). */
 async function loadActiveConfig(prisma: PrismaClient) {
@@ -40,7 +40,7 @@ export async function runAnalysis(prisma: PrismaClient, publish: (event: string,
 
   const m15 = candles.M15 ?? [];
   const m5 = candles.M5 ?? [];
-  if (m15.length < 60 || m5.length < 100) {
+  if (m15.length < 30 || m5.length < 50) {
     logger.info({ m15: m15.length, m5: m5.length }, 'insufficient candles, skipping');
     return null;
   }
@@ -50,12 +50,73 @@ export async function runAnalysis(prisma: PrismaClient, publish: (event: string,
     env.ENGINE_VERSION,
   );
 
-  if (!out.signal) {
-    logger.debug({ why: out.debug.why, failed: out.debug.failed }, 'no signal');
-    return null;
+  let sig: XauusdSignal | null = out.signal;
+  let llmGenerated = false;
+
+  if (!sig) {
+    logger.debug({ why: out.debug.why, failed: out.debug.failed }, 'no signal (rule engine)');
+    // LLM-first fallback: DeepSeek detects a setup from the same candles.
+    const llmSig = await detectSignalWithLlm(
+      m15.slice(-20).map(c => ({
+        openTime: c.openTime,
+        open: c.open, high: c.high, low: c.low, close: c.close,
+      })),
+      m15[m15.length - 1]?.close ?? 0,
+    );
+    if (!llmSig || llmSig.direction === 'NONE') {
+      logger.debug('no signal (llm)');
+      return null;
+    }
+    logger.info({ dir: llmSig.direction, entry: llmSig.entry, conf: llmSig.confidence }, 'llm signal detected');
+    const entry = llmSig.entry;
+    const sl = llmSig.stopLoss;
+    const risk = Math.abs(entry - sl);
+    sig = {
+      id: `llm-${Date.now()}`,
+      symbol: 'XAUUSD',
+      direction: llmSig.direction as Direction,
+      status: 'CONFIRMED',
+      mmxmModel: (llmSig.mmxmModel === 'MARKET_MAKER_SELL_MODEL'
+        ? 'MARKET_MAKER_SELL_MODEL'
+        : 'MARKET_MAKER_BUY_MODEL') as MmxmModel,
+      entryMin: Math.min(entry, sl + risk * 0.5),
+      entryMax: Math.max(entry, sl + risk * 0.5),
+      preferredEntry: entry,
+      stopLoss: sl,
+      takeProfits: llmSig.takeProfits.slice(0, 3).map((tp, i) => ({
+        level: (i + 1) as 1 | 2 | 3,
+        price: tp,
+        allocationPercentage: Math.max(10, 100 - i * 25),
+        liquidityTarget: 'LLM',
+      })),
+      riskRewardRatio: risk > 0 && llmSig.takeProfits[0] != null
+        ? Math.abs(llmSig.takeProfits[0] - entry) / risk
+        : 1,
+      confidenceScore: Math.min(100, Math.round(llmSig.confidence)),
+      higherTimeframeBias: (llmSig.htfBias === 'BULLISH' || llmSig.htfBias === 'BEARISH'
+        ? llmSig.htfBias
+        : 'NEUTRAL') as Bias,
+      setupTimeframe: 'M15',
+      confirmationTimeframe: 'M5',
+      precisionTimeframe: 'M1',
+      reasons: llmSig.reasons.map(r => ({
+        code: r.code,
+        description: r.description,
+        evidenceCandleIds: [],
+        weight: Math.max(1, Math.round((r.weight ?? 0.5) * 100)),
+      })),
+      invalidationRules: [
+        { code: 'SL_HIT', description: 'Stop loss hit', price: sl, condition: 'CLOSE_BELOW' },
+      ],
+      detectedAt: new Date().toISOString(),
+      confirmedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 4 * 3600_000).toISOString(),
+      strategyVersion: 'llm-v1',
+    };
+    llmGenerated = true;
   }
 
-  const sig = out.signal;
+  if (!sig) return null;
   const hash = signalHash(sig);
 
   // dedupe: identical active signal already exists?
@@ -99,6 +160,10 @@ export async function runAnalysis(prisma: PrismaClient, publish: (event: string,
       precisionTf: 'M1',
       invalidationRules: sig.invalidationRules as never,
       strategyVersionId: versionId,
+      aiVerified: llmGenerated,
+      aiInsight: llmGenerated
+        ? ({ verdict: 'AGREE', summary: 'LLM-generated signal (' + sig.direction + ')', keyLevels: [], risks: [], suggestion: 'LLM detected setup from recent candles' } as never)
+        : (null as never),
       confirmedAt: new Date(),
       expiresAt,
       reasons: {
@@ -133,7 +198,7 @@ export async function runAnalysis(prisma: PrismaClient, publish: (event: string,
         confidence: sig.confidenceScore,
         htfBias: sig.higherTimeframeBias,
         reasons: sig.reasons.map(r => r.description),
-        recentCandles: m15.slice(-40).map(c => ({
+        recentCandles: m15.slice(-20).map(c => ({
           openTime: c.openTime,
           open: c.open, high: c.high, low: c.low, close: c.close,
         })),
