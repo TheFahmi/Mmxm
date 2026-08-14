@@ -45,8 +45,8 @@ export default function DataSourcePage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard label="API Health" value={health?.status ?? '—'}
             tone={health?.status === 'ok' ? 'green' : 'red'} />
-          <StatCard label="Database" value={health?.db ?? '—'} tone={health?.db === 'up' ? 'green' : 'red'} />
-          <StatCard label="Redis" value={health?.redis ?? '—'} tone={health?.redis === 'up' ? 'green' : 'red'} />
+          <StatCard label="Database" value={health?.db ?? '—'} tone={health?.db === 'ok' ? 'green' : 'red'} />
+          <StatCard label="Redis" value={health?.redis ?? '—'} tone={health?.redis === 'ok' ? 'green' : 'red'} />
           <StatCard label="Terminal Status"
             value={t ? <StatusBadge status={t.computedStatus} /> : '—'}
             sub={t ? `heartbeat ${t.heartbeatAgeSeconds}s ago` : undefined}

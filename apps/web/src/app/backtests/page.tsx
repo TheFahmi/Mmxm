@@ -53,8 +53,8 @@ export default function BacktestsPage() {
           </button>
         </div>
 
-        <div className="rounded-lg border border-border overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="rounded-lg border border-border overflow-x-auto">
+          <table className="w-full text-sm whitespace-nowrap">
             <thead className="bg-muted/60 text-muted-foreground text-left">
               <tr>
                 <th className="px-3 py-2">Name</th>

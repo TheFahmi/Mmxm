@@ -70,7 +70,7 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
 
             <section className="rounded-lg border border-border p-4">
               <h2 className="font-semibold mb-2">Take Profits</h2>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm whitespace-nowrap">
                 <thead className="text-muted-foreground text-left">
                   <tr><th className="py-1">TP</th><th>Price</th><th>Alloc</th><th>Liquidity Target</th></tr>
                 </thead>
@@ -84,7 +84,7 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </section>
 
             <section className="rounded-lg border border-border p-4">

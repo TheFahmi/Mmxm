@@ -79,8 +79,8 @@ export default function DashboardPage() {
             <h2 className="text-lg font-semibold">Latest Signals</h2>
             <Link href="/signals" className="text-sm text-yellow-500 hover:underline">View all →</Link>
           </div>
-          <div className="rounded-lg border border-border overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="rounded-lg border border-border overflow-x-auto">
+            <table className="w-full text-sm whitespace-nowrap">
               <thead className="bg-muted/60 text-muted-foreground">
                 <tr>
                   <th className="text-left px-3 py-2">Time</th>
