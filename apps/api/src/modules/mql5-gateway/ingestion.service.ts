@@ -60,6 +60,15 @@ export class IngestionService {
       const latest = fresh[fresh.length - 1]!;
       await this.redis.xadd(TICK_STREAM, 'MAXLEN', '~', 1000, '*',
         'payload', JSON.stringify(latest));
+      // also fan-out over pub/sub so the WS gateway emits xauusd.tick live
+      await this.redis.publish('mmxm:pub:tick', JSON.stringify({
+        brokerSymbol: latest.brokerSymbol,
+        canonicalSymbol: 'XAUUSD',
+        bid: latest.bid,
+        ask: latest.ask,
+        last: latest.last,
+        brokerTimestampMs: latest.brokerTimestampMs,
+      }));
     }
     return { accepted, duplicated };
   }

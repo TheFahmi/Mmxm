@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createChart, type IChartApi, type ISeriesApi, ColorType, CrosshairMode } from 'lightweight-charts';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api';
@@ -13,14 +13,21 @@ interface CandleRow {
   timeframe: string;
 }
 
+const TIMEFRAMES = ['M1', 'M5', 'M15', 'H1'] as const;
+type TF = (typeof TIMEFRAMES)[number];
+
+const TF_LIMIT: Record<TF, number> = { M1: 1000, M5: 500, M15: 400, H1: 300 };
+
 export default function ChartPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const tickSeriesRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const [timeframe, setTimeframe] = useState<TF>('M5');
 
   const { data: candles } = useQuery({
-    queryKey: ['candles', 'M5'],
-    queryFn: () => apiGet<CandleRow[]>('/market-data/candles?timeframe=M5&limit=500'),
+    queryKey: ['candles', timeframe],
+    queryFn: () => apiGet<CandleRow[]>(`/market-data/candles?timeframe=${timeframe}&limit=${TF_LIMIT[timeframe]}`),
     refetchInterval: 60_000,
   });
 
@@ -44,9 +51,18 @@ export default function ChartPage() {
       borderUpColor: '#16a34a', borderDownColor: '#dc2626',
       wickUpColor: '#16a34a', wickDownColor: '#dc2626',
     });
+    const tickSeries = chart.addLineSeries({
+      color: '#f59e0b', lineWidth: 1, priceLineVisible: false, lastValueVisible: true,
+    });
     chartRef.current = chart;
     seriesRef.current = series;
-    return () => { chart.remove(); chartRef.current = null; seriesRef.current = null; };
+    tickSeriesRef.current = tickSeries;
+    return () => {
+      chart.remove();
+      chartRef.current = null;
+      seriesRef.current = null;
+      tickSeriesRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -61,7 +77,7 @@ export default function ChartPage() {
   useWsEvent<{ timeframe: string; openTime: string; open: number; high: number; low: number; close: number }>(
     'xauusd.candle.updated',
     (c) => {
-      if (c.timeframe !== 'M5' || !seriesRef.current) return;
+      if (c.timeframe !== timeframe || !seriesRef.current) return;
       seriesRef.current.update({
         time: (new Date(c.openTime).getTime() / 1000) as never,
         open: c.open, high: c.high, low: c.low, close: c.close,
@@ -69,14 +85,41 @@ export default function ChartPage() {
     },
   );
 
+  // Live tick line (per-price-update, real-time)
+  useWsEvent<{ bid: number; ask: number; last: number | null; brokerTimestampMs: number }>(
+    'xauusd.tick',
+    (t) => {
+      if (!tickSeriesRef.current) return;
+      const price = t.last ?? t.bid ?? t.ask;
+      if (price == null) return;
+      const time = (t.brokerTimestampMs / 1000) as never;
+      tickSeriesRef.current.update({ time, value: price });
+    },
+  );
+
   return (
     <>
       <Nav />
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-4">
-        <h1 className="text-lg font-semibold">XAUUSD · M5</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold">XAUUSD · {timeframe}</h1>
+          <div className="flex gap-1 rounded-lg border border-border p-1">
+            {TIMEFRAMES.map(tf => (
+              <button
+                key={tf}
+                onClick={() => setTimeframe(tf)}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                  timeframe === tf ? 'bg-amber-500 text-black font-semibold' : 'text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {tf}
+              </button>
+            ))}
+          </div>
+        </div>
         <div ref={containerRef} className="h-[600px] rounded-lg border border-border" />
         <p className="text-xs text-muted-foreground">
-          Overlays (FVG/OB/liquidity/entry zones) render from signal detail pages. Analysis only.
+          Candlestick per timeframe · garis kuning = harga tick real-time. Overlays (FVG/OB/liquidity) dari halaman sinyal.
         </p>
       </main>
     </>
