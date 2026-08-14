@@ -28,7 +28,7 @@ input bool SendCurrentCandles = true;
 input bool SendClosedCandles  = true;
 input bool SynchronizeHistoryOnStart = true;
 
-input int InitialM1Bars  = 20000;
+input int InitialM1Bars  = 45000;
 input int InitialM5Bars  = 10000;
 input int InitialM15Bars = 5000;
 input int InitialH1Bars  = 3000;

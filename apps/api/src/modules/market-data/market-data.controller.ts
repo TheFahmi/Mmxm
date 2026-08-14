@@ -21,13 +21,17 @@ export class MarketDataController {
     if (q.before) where['openTime'] = { lt: new Date(q.before) };
     const rows = await this.prisma.candle.findMany({
       where,
-      orderBy: { openTime: 'asc' },
+      orderBy: { openTime: 'desc' },
       take: q.limit,
     });
-    // dedupe by openTime (highest revision last in asc order) — keep latest revision
+    // desc gives the LATEST N; reverse to ascending for chart display.
+    // dedupe by openTime — keep latest revision (first-seen in desc order).
     const byTime = new Map<string, (typeof rows)[number]>();
-    for (const r of rows) byTime.set(r.openTime.toISOString(), r);
-    const data = [...byTime.values()].map(r => ({
+    for (const r of rows) {
+      const key = r.openTime.toISOString();
+      if (!byTime.has(key)) byTime.set(key, r);
+    }
+    const data = [...byTime.values()].reverse().map(r => ({
       id: r.id,
       canonicalSymbol: r.canonicalSymbol,
       timeframe: r.timeframe,

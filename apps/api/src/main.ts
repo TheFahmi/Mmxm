@@ -26,6 +26,23 @@ async function bootstrap() {
   // HMAC signs JSON.stringify(req.body) — the MQL5 EA must emit canonical JSON with
   // no trailing-zero floats (MmxmJsonNum trims to shortest repr) so both sides match.
 
+  // Tee raw request body for HMAC verification without overriding the parser.
+  // Wrap the payload stream in a PassThrough that forwards to Fastify's parser while
+  // also buffering a copy onto req.rawBody (signed exactly as the EA sent it).
+  const fastify = app.getHttpAdapter().getInstance();
+  const { PassThrough } = require('stream');
+  fastify.addHook('preParsing', async (req: any, _reply: any, payload: any) => {
+    if (req.headers['x-mmxm-signature']) {
+      const chunks: Buffer[] = [];
+      const tee = new PassThrough();
+      payload.on('data', (c: Buffer) => { chunks.push(c); tee.write(c); });
+      payload.on('end', () => { req.rawBody = Buffer.concat(chunks); tee.end(); });
+      payload.on('error', (e: Error) => tee.destroy(e));
+      return tee;
+    }
+    return payload;
+  });
+
   app.setGlobalPrefix('api/v1');
   app.enableCors({ origin: env.CORS_ORIGIN?.split(',') ?? true, credentials: true });
   app.enableShutdownHooks();
