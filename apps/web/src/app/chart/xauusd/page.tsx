@@ -99,7 +99,8 @@ export default function ChartPage() {
       if (!tickSeriesRef.current) return;
       const price = t.last ?? t.bid ?? t.ask;
       if (price == null) return;
-      const time = (t.brokerTimestampMs / 1000) as never;
+      // append a new point each time — use monotonic now() so it advances rightward
+      const time = (Date.now() / 1000) as never;
       tickSeriesRef.current.update({ time, value: price });
     },
   );
@@ -109,7 +110,8 @@ export default function ChartPage() {
     if (!latestTick || !tickSeriesRef.current) return;
     const price = latestTick.bid;
     if (price == null) return;
-    const time = (latestTick.brokerTimestampMs / 1000) as never;
+    // monotonic now() => new point every poll tick, moves rightward
+    const time = (Date.now() / 1000) as never;
     tickSeriesRef.current.update({ time, value: price });
   }, [latestTick]);
 
