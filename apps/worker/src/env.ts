@@ -11,6 +11,11 @@ const schema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_CHAT_ID: z.string().optional(),
   NOTIFICATION_WEBHOOK_URL: z.string().optional(),
+  DEEPSEEK_ENABLED: z.enum(['true', 'false']).default('false').transform(v => v === 'true'),
+  DEEPSEEK_BASE_URL: z.string().default('https://llm.mfah.me/v1'),
+  DEEPSEEK_API_KEY: z.string().default(''),
+  DEEPSEEK_MODEL: z.string().default('deepseek-v4-flash'),
+  DEEPSEEK_TIMEOUT_MS: z.coerce.number().default(20_000),
 });
 
 export const env = schema.parse(process.env);

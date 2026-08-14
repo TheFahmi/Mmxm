@@ -5,7 +5,7 @@ import { TIMEFRAMES } from '@mmxm/types';
 const TF_ORDER: Timeframe[] = [...TIMEFRAMES];
 
 // Server-side lookback — prevents ancient data from polluting dealing range / ATR
-const LOOKBACK_DAYS: Partial<Record<Timeframe, number>> = { M15: 7, M5: 3, M1: 1, H1: 30, H4: 90, D1: 180 };
+const LOOKBACK_DAYS: Partial<Record<Timeframe, number>> = { M15: 30, M5: 7, M1: 2, H1: 30, H4: 90, D1: 180 };
 
 /** Load recent candles per timeframe, mapped to engine Candle shape. */
 export async function loadCandles(

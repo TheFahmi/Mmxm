@@ -18,6 +18,14 @@ interface SignalDetail {
   stopLoss: string;
   riskReward: string;
   htfBias: string;
+  aiInsight: {
+    verdict: 'AGREE' | 'DISAGREE' | 'NEUTRAL';
+    summary: string;
+    keyLevels: string[];
+    risks: string[];
+    suggestion: string;
+  } | null;
+  aiVerified: boolean;
   setupTf: string;
   confirmationTf: string;
   takeProfits: { level: number; price: number; allocationPercentage: number; liquidityTarget?: string }[];
@@ -99,6 +107,41 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
                 ))}
               </ul>
             </section>
+
+            {s.aiInsight && (
+              <section className="rounded-lg border border-border p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <h2 className="font-semibold">AI Insight (DeepSeek)</h2>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                    s.aiInsight.verdict === 'AGREE' ? 'bg-green-500/10 text-green-600' :
+                    s.aiInsight.verdict === 'DISAGREE' ? 'bg-red-500/10 text-red-600' :
+                    'bg-yellow-500/10 text-yellow-600'
+                  }`}>
+                    {s.aiInsight.verdict}
+                  </span>
+                </div>
+                <p className="text-sm mb-3">{s.aiInsight.summary}</p>
+                {s.aiInsight.keyLevels?.length > 0 && (
+                  <div className="mb-2">
+                    <span className="text-xs text-muted-foreground font-medium">Key levels: </span>
+                    <span className="text-sm tabular-nums">{s.aiInsight.keyLevels.join(' · ')}</span>
+                  </div>
+                )}
+                {s.aiInsight.risks?.length > 0 && (
+                  <div className="mb-2">
+                    <span className="text-xs text-muted-foreground font-medium">Risks: </span>
+                    <ul className="text-sm list-disc list-inside space-y-0.5">
+                      {s.aiInsight.risks.map((r, i) => <li key={i}>{r}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {s.aiInsight.suggestion && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    <span className="font-medium text-foreground">Suggestion: </span>{s.aiInsight.suggestion}
+                  </p>
+                )}
+              </section>
+            )}
 
             <section className="rounded-lg border border-border p-4">
               <h2 className="font-semibold mb-2">Invalidation Rules</h2>

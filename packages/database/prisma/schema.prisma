@@ -367,6 +367,8 @@ model Signal {
   confirmationTf    String          @default("M5")
   precisionTf       String          @default("M1")
   invalidationRules Json
+  aiInsight         Json?
+  aiVerified        Boolean         @default(false)
   strategyVersionId String
   strategyVersion   StrategyVersion @relation(fields: [strategyVersionId], references: [id])
   detectedAt        DateTime        @default(now())

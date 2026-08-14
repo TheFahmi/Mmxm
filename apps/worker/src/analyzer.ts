@@ -6,6 +6,7 @@ import { env } from './env.js';
 import { loadCandles } from './candles.js';
 import { logger } from './logger.js';
 import { notifySignal } from './notify.js';
+import { verifySignalWithLlm } from './deepseek.js';
 
 /** Load active strategy config (falls back to defaults). */
 async function loadActiveConfig(prisma: PrismaClient) {
@@ -120,6 +121,37 @@ export async function runAnalysis(prisma: PrismaClient, publish: (event: string,
 
   publish('xauusd.signal.created', { id: created.id, direction: sig.direction, entry: sig.preferredEntry, confidence: sig.confidenceScore });
   void notifySignal(created.id, sig);
+
+  // DeepSeek verification (non-blocking; failure keeps the signal)
+  void (async () => {
+    try {
+      const insight = await verifySignalWithLlm({
+        direction: sig.direction,
+        entry: sig.preferredEntry,
+        stopLoss: sig.stopLoss,
+        takeProfits: (sig.takeProfits as { price: number }[]).map(tp => tp.price),
+        confidence: sig.confidenceScore,
+        htfBias: sig.higherTimeframeBias,
+        reasons: sig.reasons.map(r => r.description),
+        recentCandles: m15.slice(-40).map(c => ({
+          openTime: c.openTime,
+          open: c.open, high: c.high, low: c.low, close: c.close,
+        })),
+      });
+      if (insight) {
+        await prisma.signal.update({
+          where: { id: created.id },
+          data: {
+            aiInsight: insight as never,
+            aiVerified: insight.verdict === 'AGREE',
+          },
+        });
+        logger.info({ id: created.id, verdict: insight.verdict }, 'llm verified signal');
+      }
+    } catch (e) {
+      logger.warn({ err: e instanceof Error ? e.message : String(e) }, 'llm verify post-signal error');
+    }
+  })();
 
   logger.info({ id: created.id, dir: sig.direction, entry: sig.preferredEntry, conf: sig.confidenceScore }, 'signal created');
   return created;
