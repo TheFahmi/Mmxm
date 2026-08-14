@@ -31,6 +31,13 @@ export default function ChartPage() {
     refetchInterval: 60_000,
   });
 
+  // Poll latest tick every 1s so the line updates per second even if WS events lag.
+  const { data: latestTick } = useQuery({
+    queryKey: ['tick', 'latest'],
+    queryFn: () => apiGet<{ bid: number; ask: number; brokerTimestampMs: number }>('/market-data/ticks/latest'),
+    refetchInterval: 1000,
+  });
+
   useEffect(() => {
     if (!containerRef.current || chartRef.current) return;
     const chart = createChart(containerRef.current, {
@@ -96,6 +103,15 @@ export default function ChartPage() {
       tickSeriesRef.current.update({ time, value: price });
     },
   );
+
+  // Polled tick (guaranteed ~1s cadence) — merge with WS updates.
+  useEffect(() => {
+    if (!latestTick || !tickSeriesRef.current) return;
+    const price = latestTick.bid;
+    if (price == null) return;
+    const time = (latestTick.brokerTimestampMs / 1000) as never;
+    tickSeriesRef.current.update({ time, value: price });
+  }, [latestTick]);
 
   return (
     <>
