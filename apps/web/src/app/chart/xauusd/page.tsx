@@ -82,7 +82,7 @@ export default function ChartPage() {
   }, [candles]);
 
   useWsEvent<{ timeframe: string; openTime: string; open: number; high: number; low: number; close: number }>(
-    'xauusd.candle.updated',
+    'xauusd.candle.current',
     (c) => {
       if (c.timeframe !== timeframe || !seriesRef.current) return;
       seriesRef.current.update({
