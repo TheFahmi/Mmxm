@@ -10,11 +10,11 @@ import { logger } from './logger.js';
 
 export interface LlmSignal {
   direction: 'LONG' | 'SHORT' | 'NONE';
-  entry: number;
-  stopLoss: number;
+  entry: number | null;
+  stopLoss: number | null;
   takeProfits: number[];
   confidence: number;
-  mmxmModel: string;
+  mmxmModel: string | null;
   htfBias: string;
   reasons: { code: string; description: string; weight: number }[];
   summary: string;
@@ -56,7 +56,7 @@ If no valid setup, return {"direction":"NONE", ...empty}. Entry/SL/TP must be re
       { role: 'system', content: system },
       { role: 'user', content: user },
     ],
-    max_tokens: 3000,
+    max_tokens: 6000,
     temperature: 0.1,
   };
 
@@ -83,6 +83,7 @@ If no valid setup, return {"direction":"NONE", ...empty}. Entry/SL/TP must be re
     const cleaned = content.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(cleaned) as LlmSignal;
     if (!parsed.direction) return null;
+    // always return the verdict — NONE carries reasons for "why no trade" display
     return parsed;
   } catch (e) {
     logger.warn({ err: e instanceof Error ? e.message : String(e) }, 'llm detect error');

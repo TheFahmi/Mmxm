@@ -30,7 +30,15 @@ export function signalHash(s: Pick<XauusdSignal, 'direction' | 'preferredEntry' 
 }
 
 /** Run one analysis pass over current market state. */
-export async function runAnalysis(prisma: PrismaClient, publish: (event: string, data: unknown) => void) {
+export interface LlmVerdictStore {
+  setLastVerdict: (v: { at: string; direction: string; summary: string; reasons: { code: string; description: string }[]; entry: number | null; stopLoss: number | null }) => Promise<void>;
+}
+
+export async function runAnalysis(
+  prisma: PrismaClient,
+  publish: (event: string, data: unknown) => void,
+  llmStore?: LlmVerdictStore,
+) {
   const { config, versionId } = await loadActiveConfig(prisma);
 
   const candles = await loadCandles(prisma, {
@@ -65,11 +73,21 @@ export async function runAnalysis(prisma: PrismaClient, publish: (event: string,
     );
     if (!llmSig || llmSig.direction === 'NONE') {
       logger.debug('no signal (llm)');
+      if (llmSig && llmStore) {
+        await llmStore.setLastVerdict({
+          at: new Date().toISOString(),
+          direction: 'NONE',
+          summary: llmSig.summary ?? 'No valid setup',
+          reasons: (llmSig.reasons ?? []).map(r => ({ code: r.code, description: r.description })),
+          entry: llmSig.entry ?? null,
+          stopLoss: llmSig.stopLoss ?? null,
+        });
+      }
       return null;
     }
     logger.info({ dir: llmSig.direction, entry: llmSig.entry, conf: llmSig.confidence }, 'llm signal detected');
-    const entry = llmSig.entry;
-    const sl = llmSig.stopLoss;
+    const entry = llmSig.entry ?? 0;
+    const sl = llmSig.stopLoss ?? 0;
     const risk = Math.abs(entry - sl);
     sig = {
       id: `llm-${Date.now()}`,
@@ -114,6 +132,16 @@ export async function runAnalysis(prisma: PrismaClient, publish: (event: string,
       strategyVersion: 'llm-v1',
     };
     llmGenerated = true;
+    if (llmStore) {
+      await llmStore.setLastVerdict({
+        at: new Date().toISOString(),
+        direction: sig.direction,
+        summary: llmSig.summary,
+        reasons: llmSig.reasons.map(r => ({ code: r.code, description: r.description })),
+        entry: llmSig.entry,
+        stopLoss: llmSig.stopLoss,
+      });
+    }
   }
 
   if (!sig) return null;

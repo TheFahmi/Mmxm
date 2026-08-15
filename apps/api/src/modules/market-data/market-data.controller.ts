@@ -1,8 +1,10 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, Inject } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { PrismaClient } from '@mmxm/database';
+import Redis from 'ioredis';
 import { z } from 'zod';
 import { ZodValidationPipe } from '../../common/zod.pipe';
+import { REDIS } from '../../common/redis.module';
 
 const candlesQuerySchema = z.object({
   timeframe: z.enum(['M1', 'M5', 'M15', 'H1', 'H4', 'D1']).default('M5'),
@@ -13,7 +15,10 @@ const candlesQuerySchema = z.object({
 @ApiTags('market-data')
 @Controller('market-data')
 export class MarketDataController {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    @Inject(REDIS) private readonly redis: Redis,
+  ) {}
 
   @Get('candles')
   async candles(@Query(new ZodValidationPipe(candlesQuerySchema)) q: z.infer<typeof candlesQuerySchema>) {
@@ -66,5 +71,16 @@ export class MarketDataController {
         receivedAt: t.receivedAt.toISOString(),
       },
     };
+  }
+
+  @Get('llm-verdict')
+  async llmVerdict() {
+    const raw = await this.redis.get('mmxm:llm:last-verdict');
+    if (!raw) return { success: true, data: null };
+    try {
+      return { success: true, data: JSON.parse(raw) };
+    } catch {
+      return { success: true, data: null };
+    }
   }
 }

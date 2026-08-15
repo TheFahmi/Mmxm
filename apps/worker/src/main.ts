@@ -3,7 +3,7 @@ import { Worker, Queue, type Job } from 'bullmq';
 import IORedis from 'ioredis';
 import { env } from './env.js';
 import { logger } from './logger.js';
-import { runAnalysis } from './analyzer.js';
+import { runAnalysis, type LlmVerdictStore } from './analyzer.js';
 import { runBacktest } from './backtest-runner.js';
 
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -23,11 +23,18 @@ async function main() {
     throw new Error('TRADING_EXECUTION_ENABLED=true is forbidden: system is signal-only');
   }
 
+  const LLM_VERDICT_KEY = 'mmxm:llm:last-verdict';
+  const llmStore: LlmVerdictStore = {
+    setLastVerdict: async (v) => {
+      await connection.set(LLM_VERDICT_KEY, JSON.stringify(v), 'EX', 4 * 3600);
+    },
+  };
+
   const analysisWorker = new Worker(
     'mmxm-analysis',
     async (job: Job) => {
       if (job.name === 'closed-candle') {
-        await runAnalysis(prisma, publish);
+        await runAnalysis(prisma, publish, llmStore);
       }
     },
     { connection: connection as never, concurrency: 1 },
