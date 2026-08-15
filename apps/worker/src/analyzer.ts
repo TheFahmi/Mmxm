@@ -117,12 +117,12 @@ export async function runAnalysis(
       setupTimeframe: 'M15',
       confirmationTimeframe: 'M5',
       precisionTimeframe: 'M1',
-      reasons: llmSig.reasons.map(r => ({
-        code: r.code,
-        description: r.description,
-        evidenceCandleIds: [],
-        weight: Math.max(1, Math.round((r.weight ?? 0.5) * 100)),
-      })),
+      reasons: llmSig.reasons.map(r => {
+        const rawW = r.weight ?? 5;
+        // LLM may return 0-100 or 0-1 — normalize to 1..99 for Decimal(5,2) (<1000)
+        const w = rawW > 1 ? Math.min(99, Math.round(rawW)) : Math.min(99, Math.round(rawW * 100));
+        return { code: r.code, description: r.description, evidenceCandleIds: [], weight: w };
+      }),
       invalidationRules: [
         { code: 'SL_HIT', description: 'Stop loss hit', price: sl, condition: 'CLOSE_BELOW' },
       ],
