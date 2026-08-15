@@ -40,8 +40,6 @@ export default function DashboardPage() {
     'xauusd.tick', (t) => setTick(t),
   );
 
-  // Fallback: poll latest tick from DB so Bid/Ask/Spread always show the last known
-  // price even when WS events are idle (EA quiet / market slow).
   const { data: latestTick } = useQuery({
     queryKey: ['tick', 'latest'],
     queryFn: () => apiGet<{ bid: number; ask: number; spreadPoints: number; brokerTimestampMs: number }>('/market-data/ticks/latest'),
@@ -50,6 +48,19 @@ export default function DashboardPage() {
   useEffect(() => {
     if (latestTick && latestTick.bid != null) setTick(latestTick);
   }, [latestTick, setTick]);
+
+  const { data: llmVerdict } = useQuery({
+    queryKey: ['llm-verdict'],
+    queryFn: () => apiGet<{
+      at: string;
+      direction: string;
+      summary: string;
+      reasons: { code: string; description: string }[];
+      entry: number | null;
+      stopLoss: number | null;
+    } | null>('/market-data/llm-verdict'),
+    refetchInterval: 10_000,
+  });
 
   const { data: terminals } = useQuery({
     queryKey: ['terminals'],
@@ -62,7 +73,6 @@ export default function DashboardPage() {
     refetchInterval: 15_000,
   });
   const signals = signalsData?.items ?? [];
-
   const t = terminals?.[0];
 
   return (
@@ -85,6 +95,55 @@ export default function DashboardPage() {
           <span className={`h-2 w-2 rounded-full ${wsConnected ? 'bg-bullish' : 'bg-bearish'}`} />
           WebSocket {wsConnected ? 'connected' : 'disconnected (REST fallback)'}
         </div>
+
+        {llmVerdict && (
+          <section className="rounded-lg border border-border bg-card overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-2.5">
+                <span className="h-7 w-7 rounded-md bg-foreground text-background grid place-items-center shrink-0">
+                  <span className="material-symbols-outlined text-[16px]">psychology</span>
+                </span>
+                <div>
+                  <h2 className="text-sm font-semibold leading-none">AI Insight</h2>
+                  <p className="text-[11px] text-muted-foreground">DeepSeek v4 Flash · {llmVerdict.at ? new Date(llmVerdict.at).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) + ' WIB' : '—'}</p>
+                </div>
+              </div>
+              <span className={`shrink-0 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${
+                llmVerdict.direction === 'NONE' ? 'bg-muted text-muted-foreground border-border' :
+                llmVerdict.direction === 'LONG' ? 'bg-bullish/10 text-bullish border-bullish/20' : 'bg-bearish/10 text-bearish border-bearish/20'
+              }`}>
+                {llmVerdict.direction === 'NONE' ? 'No Setup' : llmVerdict.direction}
+              </span>
+            </div>
+            <div className="px-4 py-3.5 space-y-3">
+              <p className="text-sm leading-relaxed text-foreground">{llmVerdict.summary || 'No valid trade setup detected — waiting for a clean structure.'}</p>
+              {llmVerdict.reasons?.length > 0 && (
+                <div className="space-y-1.5">
+                  {llmVerdict.reasons.map((r, i) => (
+                    <div key={i} className="flex gap-2.5 items-start rounded-md bg-muted/40 border border-border/60 px-2.5 py-2">
+                      <span className="shrink-0 inline-flex items-center rounded bg-background border border-border px-1.5 py-0.5 text-[11px] font-mono leading-none text-muted-foreground">{r.code}</span>
+                      <span className="text-xs leading-relaxed text-muted-foreground pt-0.5">{r.description}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {llmVerdict.direction === 'NONE' && (llmVerdict.entry != null || llmVerdict.stopLoss != null) && (
+                <div className="flex flex-wrap items-center gap-2 rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2.5">
+                  <span className="material-symbols-outlined text-[16px] text-amber-600 shrink-0">hourglass_empty</span>
+                  <span className="text-xs leading-relaxed">
+                    <span className="text-muted-foreground">Tunggu harga ke</span>{' '}
+                    <span className="tabular-nums font-semibold text-foreground">
+                      {llmVerdict.entry != null ? `entry ${llmVerdict.entry.toFixed(2)}` : ''}
+                      {llmVerdict.entry != null && llmVerdict.stopLoss != null ? ' · ' : ''}
+                      {llmVerdict.stopLoss != null ? `SL ${llmVerdict.stopLoss.toFixed(2)}` : ''}
+                    </span>
+                    <span className="text-muted-foreground"> sebelum setup valid.</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         <section>
           <div className="flex items-center justify-between mb-3">
