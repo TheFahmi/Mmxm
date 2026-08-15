@@ -113,7 +113,7 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
             {s.aiInsight && (
               <section className="rounded-lg border border-border p-4">
                 <div className="flex items-center gap-2 mb-2">
-                  <h2 className="font-semibold">AI Insight (DeepSeek)</h2>
+                  <h2 className="font-semibold">AI Insight (MMAI v1)</h2>
                   <span className={`text-xs px-2 py-0.5 rounded-full ${
                     s.aiInsight.verdict === 'AGREE' ? 'bg-green-500/10 text-green-600' :
                     s.aiInsight.verdict === 'DISAGREE' ? 'bg-red-500/10 text-red-600' :

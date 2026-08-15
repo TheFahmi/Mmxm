@@ -129,7 +129,7 @@ export async function runAnalysis(
       detectedAt: new Date().toISOString(),
       confirmedAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 4 * 3600_000).toISOString(),
-      strategyVersion: 'llm-v1',
+      strategyVersion: 'mmai-v1',
     };
     llmGenerated = true;
     if (llmStore) {

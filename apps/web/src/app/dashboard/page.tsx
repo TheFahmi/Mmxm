@@ -105,7 +105,7 @@ export default function DashboardPage() {
                 </span>
                 <div>
                   <h2 className="text-sm font-semibold leading-none">AI Insight</h2>
-                  <p className="text-[11px] text-muted-foreground">DeepSeek v4 Flash · {llmVerdict.at ? new Date(llmVerdict.at).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) + ' WIB' : '—'}</p>
+                  <p className="text-[11px] text-muted-foreground">MMAI v1 · {llmVerdict.at ? new Date(llmVerdict.at).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) + ' WIB' : '—'}</p>
                 </div>
               </div>
               <span className={`shrink-0 inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${
