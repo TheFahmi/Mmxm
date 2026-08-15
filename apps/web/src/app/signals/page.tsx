@@ -96,7 +96,7 @@ export default function SignalsPage() {
                   <div className="flex flex-col items-center gap-2">
                     <span className="material-symbols-outlined text-3xl text-muted-foreground/60">hourglass_empty</span>
                     <p className="text-sm font-medium text-muted-foreground">Belum ada sinyal</p>
-                    <p className="text-xs text-muted-foreground/70 max-w-[320px]">Market XAUUSD tutup Sabtu-Minggu. Sinyal MMAI v1 akan muncul lagi Senin 22:00 UTC (Selasa 05:00 WIB) saat candle baru tersedia.</p>
+                    <p className="text-xs text-muted-foreground/70 max-w-[320px]">Market XAUUSD tutup Sabtu-Minggu. Sinyal MMAI v1 akan muncul lagi Senin 05:00 WIB saat market buka.</p>
                   </div>
                 </td></tr>
               )}

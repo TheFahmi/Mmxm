@@ -195,7 +195,7 @@ export default function DashboardPage() {
                     <div className="flex flex-col items-center gap-2">
                       <span className="material-symbols-outlined text-2xl text-muted-foreground/60">hourglass_empty</span>
                       <p className="text-sm font-medium text-muted-foreground">Belum ada sinyal</p>
-                      <p className="text-xs text-muted-foreground/70 max-w-[280px]">Market XAUUSD libur Sabtu-Minggu — tunggu Senin 22:00 UTC.</p>
+                      <p className="text-xs text-muted-foreground/70 max-w-[280px]">Market XAUUSD tutup Sabtu-Minggu — tunggu Senin 05:00 WIB.</p>
                     </div>
                   </td></tr>
                 )}

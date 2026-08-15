@@ -60,7 +60,7 @@ export async function runAnalysis(
         await llmStore.setLastVerdict({
           at: new Date().toISOString(),
           direction: 'NONE',
-          summary: 'Market tutup — XAUUSD libur Sabtu-Minggu. Analisa lanjut Senin buka (22:00 UTC).',
+          summary: 'Market tutup — XAUUSD libur Sabtu-Minggu. Analisa lanjut Senin 05:00 WIB saat market buka.',
           reasons: [{ code: 'MARKET_CLOSED', description: `Candle terakhir ${lastM15 ? new Date(lastM15.openTime as unknown as string).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB' : 'tidak ada'} — sudah ${ageMin} menit lalu. Tunggu market buka.` }],
           entry: null,
           stopLoss: null,
