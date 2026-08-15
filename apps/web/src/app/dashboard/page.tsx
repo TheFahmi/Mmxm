@@ -163,7 +163,9 @@ export default function DashboardPage() {
                   <th className="text-left px-3 py-2">Status</th>
                   <th className="text-right px-3 py-2">Entry</th>
                   <th className="text-right px-3 py-2">SL</th>
-                  <th className="text-right px-3 py-2">TP1 · TP2 · TP3</th>
+                  <th className="text-right px-3 py-2">TP1</th>
+                  <th className="text-right px-3 py-2">TP2</th>
+                  <th className="text-right px-3 py-2">TP3</th>
                   <th className="text-right px-3 py-2">RR</th>
                   <th className="text-right px-3 py-2">Confidence</th>
                 </tr>
@@ -181,13 +183,15 @@ export default function DashboardPage() {
                     <td className="px-3 py-2"><StatusBadge status={s.status} /></td>
                     <td className="px-3 py-2 text-right tabular-nums">{Number(s.preferredEntry).toFixed(2)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{Number(s.stopLoss).toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-xs">{s.takeProfits?.map(tp => Number(tp.price).toFixed(2)).join(' · ') ?? '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-xs text-bullish">{s.takeProfits?.[0] ? Number(s.takeProfits[0].price).toFixed(2) : '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-xs text-bullish/70">{s.takeProfits?.[1] ? Number(s.takeProfits[1].price).toFixed(2) : '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-xs text-muted-foreground">{s.takeProfits?.[2] ? Number(s.takeProfits[2].price).toFixed(2) : '—'}</td>
                     <td className="px-3 py-2 text-right tabular-nums">1:{Number(s.riskReward).toFixed(2)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{s.confidence}</td>
                   </tr>
                 ))}
                 {signals.length === 0 && (
-                  <tr><td colSpan={9} className="px-3 py-12 text-center">
+                  <tr><td colSpan={11} className="px-3 py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <span className="material-symbols-outlined text-2xl text-muted-foreground/60">hourglass_empty</span>
                       <p className="text-sm font-medium text-muted-foreground">Belum ada sinyal</p>
