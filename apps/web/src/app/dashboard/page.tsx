@@ -187,7 +187,13 @@ export default function DashboardPage() {
                   </tr>
                 ))}
                 {signals.length === 0 && (
-                  <tr><td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">No signals yet.</td></tr>
+                  <tr><td colSpan={9} className="px-3 py-12 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="material-symbols-outlined text-2xl text-muted-foreground/60">hourglass_empty</span>
+                      <p className="text-sm font-medium text-muted-foreground">Belum ada sinyal</p>
+                      <p className="text-xs text-muted-foreground/70 max-w-[280px]">Market XAUUSD libur Sabtu-Minggu — tunggu Senin 22:00 UTC.</p>
+                    </div>
+                  </td></tr>
                 )}
               </tbody>
             </table>

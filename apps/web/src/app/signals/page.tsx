@@ -18,6 +18,7 @@ interface SignalRow {
   confidence: number;
   setupTf: string;
   detectedAt: string;
+  takeProfits: { level: number; price: number; allocationPercentage: number }[];
 }
 
 const STATUSES = ['', 'PRELIMINARY', 'CONFIRMED', 'ACTIVE', 'COMPLETED', 'INVALIDATED', 'EXPIRED'];
@@ -62,6 +63,7 @@ export default function SignalsPage() {
                 <th className="text-left px-3 py-2">Setup TF</th>
                 <th className="text-right px-3 py-2">Entry</th>
                 <th className="text-right px-3 py-2">SL</th>
+                <th className="text-right px-3 py-2">TP1 · TP2 · TP3</th>
                 <th className="text-right px-3 py-2">RR</th>
                 <th className="text-right px-3 py-2">Conf</th>
               </tr>
@@ -80,12 +82,19 @@ export default function SignalsPage() {
                   <td className="px-3 py-2 text-muted-foreground">{s.setupTf}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{Number(s.preferredEntry).toFixed(2)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{Number(s.stopLoss).toFixed(2)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-xs">{s.takeProfits?.map(tp => Number(tp.price).toFixed(2)).join(' · ') ?? '—'}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{Number(s.riskReward).toFixed(2)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{s.confidence}</td>
                 </tr>
               ))}
               {data?.items.length === 0 && (
-                <tr><td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">No signals.</td></tr>
+                <tr><td colSpan={10} className="px-3 py-12 text-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <span className="material-symbols-outlined text-3xl text-muted-foreground/60">hourglass_empty</span>
+                    <p className="text-sm font-medium text-muted-foreground">Belum ada sinyal</p>
+                    <p className="text-xs text-muted-foreground/70 max-w-[320px]">Market XAUUSD tutup Sabtu-Minggu. Sinyal MMAI v1 akan muncul lagi Senin 22:00 UTC (Selasa 05:00 WIB) saat candle baru tersedia.</p>
+                  </div>
+                </td></tr>
               )}
             </tbody>
           </table>
