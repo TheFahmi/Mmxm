@@ -28,6 +28,9 @@ interface SignalRow {
   preferredEntry: string;
   confidence: number;
   detectedAt: string;
+  takeProfits: { level: number; price: number; allocationPercentage: number }[];
+  stopLoss: string;
+  riskReward: string;
 }
 
 type SignalListResponse = { items: SignalRow[] };
@@ -159,6 +162,9 @@ export default function DashboardPage() {
                   <th className="text-left px-3 py-2">Model</th>
                   <th className="text-left px-3 py-2">Status</th>
                   <th className="text-right px-3 py-2">Entry</th>
+                  <th className="text-right px-3 py-2">SL</th>
+                  <th className="text-right px-3 py-2">TP1 · TP2 · TP3</th>
+                  <th className="text-right px-3 py-2">RR</th>
                   <th className="text-right px-3 py-2">Confidence</th>
                 </tr>
               </thead>
@@ -174,11 +180,14 @@ export default function DashboardPage() {
                     <td className="px-3 py-2 text-muted-foreground">{s.mmxmModel === 'MARKET_MAKER_BUY_MODEL' ? 'MMBM' : 'MMSM'}</td>
                     <td className="px-3 py-2"><StatusBadge status={s.status} /></td>
                     <td className="px-3 py-2 text-right tabular-nums">{Number(s.preferredEntry).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{Number(s.stopLoss).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-xs">{s.takeProfits?.map(tp => Number(tp.price).toFixed(2)).join(' · ') ?? '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">1:{Number(s.riskReward).toFixed(2)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{s.confidence}</td>
                   </tr>
                 ))}
                 {signals.length === 0 && (
-                  <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">No signals yet.</td></tr>
+                  <tr><td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">No signals yet.</td></tr>
                 )}
               </tbody>
             </table>

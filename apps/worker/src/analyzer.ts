@@ -48,6 +48,27 @@ export async function runAnalysis(
 
   const m15 = candles.M15 ?? [];
   const m5 = candles.M5 ?? [];
+  // Nugget: XAUUSD tutup Jumat 22:00 UTC — Sabtu/Minggu market libur, jangan halusinasi sinyal dari candle stale
+  {
+    const lastM15 = m15[m15.length - 1];
+    const ageMs = lastM15 ? Date.now() - new Date(lastM15.openTime as unknown as string).getTime() : Infinity;
+    const ageMin = Math.round(ageMs / 60000);
+    const STALE_MIN = 60; // candle terakhir >60 menit = market tutup
+    if (!lastM15 || ageMs > STALE_MIN * 60_000) {
+      logger.info({ ageMin, lastOpen: lastM15?.openTime }, 'market closed (stale candles), skipping analysis');
+      if (llmStore) {
+        await llmStore.setLastVerdict({
+          at: new Date().toISOString(),
+          direction: 'NONE',
+          summary: 'Market tutup — XAUUSD libur Sabtu-Minggu. Analisa lanjut Senin buka (22:00 UTC).',
+          reasons: [{ code: 'MARKET_CLOSED', description: `Candle terakhir ${lastM15 ? new Date(lastM15.openTime as unknown as string).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB' : 'tidak ada'} — sudah ${ageMin} menit lalu. Tunggu market buka.` }],
+          entry: null,
+          stopLoss: null,
+        });
+      }
+      return null;
+    }
+  }
   if (m15.length < 30 || m5.length < 50) {
     logger.info({ m15: m15.length, m5: m5.length }, 'insufficient candles, skipping');
     return null;
