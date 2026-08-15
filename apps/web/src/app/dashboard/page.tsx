@@ -120,9 +120,9 @@ export default function DashboardPage() {
               {llmVerdict.reasons?.length > 0 && (
                 <div className="space-y-1.5">
                   {llmVerdict.reasons.map((r, i) => (
-                    <div key={i} className="flex gap-2.5 items-start rounded-md bg-muted/40 border border-border/60 px-2.5 py-2">
-                      <span className="shrink-0 inline-flex items-center rounded bg-background border border-border px-1.5 py-0.5 text-[11px] font-mono leading-none text-muted-foreground">{r.code}</span>
-                      <span className="text-xs leading-relaxed text-muted-foreground pt-0.5">{r.description}</span>
+                    <div key={i} className="rounded-md bg-muted/40 border border-border/60 px-3 py-2.5 space-y-1">
+                      <div className="text-[11px] font-mono font-medium tracking-wide text-muted-foreground">{r.code}</div>
+                      <div className="text-xs leading-relaxed text-foreground">{r.description}</div>
                     </div>
                   ))}
                 </div>

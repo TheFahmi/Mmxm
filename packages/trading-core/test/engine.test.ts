@@ -174,8 +174,8 @@ describe('engine MMBM/MMSM', () => {
       expect(out.signal.direction).toBe('SHORT');
       expect(out.signal.mmxmModel).toBe('MARKET_MAKER_SELL_MODEL');
     } else {
-      // acceptable: mirrored geometry may break a strict check; assert no LONG leaked
-      expect(out.signal?.direction ?? 'SHORT').toBe('SHORT');
+      // acceptable: mirrored geometry may break a strict check — assert no signal leaked
+      expect(out.signal).toBeNull();
     }
   });
 });

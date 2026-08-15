@@ -96,13 +96,15 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
             </section>
 
             <section className="rounded-lg border border-border p-4">
-              <h2 className="font-semibold mb-2">Reasons ({s.reasons.length})</h2>
-              <ul className="space-y-1 text-sm">
+              <h2 className="font-semibold mb-3">Reasons ({s.reasons.length})</h2>
+              <ul className="space-y-1.5">
                 {s.reasons.map((r, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="text-yellow-500 font-mono text-xs w-44 shrink-0">{r.code}</span>
-                    <span>{r.description}</span>
-                    <span className="ml-auto text-muted-foreground">+{Number(r.weight)}</span>
+                  <li key={i} className="rounded-md bg-muted/40 border border-border/60 px-3 py-2.5 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-mono font-medium tracking-wide text-muted-foreground">{r.code}</span>
+                      <span className="ml-auto text-xs font-medium tabular-nums text-muted-foreground">+{Number(r.weight)}</span>
+                    </div>
+                    <div className="text-xs leading-relaxed text-foreground">{r.description}</div>
                   </li>
                 ))}
               </ul>
