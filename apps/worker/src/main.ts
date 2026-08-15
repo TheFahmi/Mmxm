@@ -67,8 +67,8 @@ async function main() {
       },
     );
   };
-  // every minute, aligned slightly after candle close
-  setInterval(() => void schedule(), 60_000);
+  // every 10 minutes — Muse 21s/cycle, hemat token 6x
+  setInterval(() => void schedule(), 10 * 60_000);
   void schedule();
 
   logger.info('worker started (signal-only)');
