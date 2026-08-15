@@ -162,6 +162,25 @@ export async function runAnalysis(
     return null;
   }
 
+  // Anti-spam: same direction within cooldown → skip unless confidence >= 90
+  // (cek 10 menit, tapi jangan kirim SHORT 73 → SHORT 73 lagi tiap 10m)
+  const lastSameDir = await prisma.signal.findFirst({
+    where: { canonicalSymbol: 'XAUUSD', direction: sig.direction },
+    orderBy: { detectedAt: 'desc' },
+  });
+  if (lastSameDir) {
+    const ageMs = Date.now() - new Date(lastSameDir.detectedAt).getTime();
+    const cooldownMs = 90 * 60 * 1000; // 90 menit
+    const isHighConf = sig.confidenceScore >= 90;
+    if (ageMs < cooldownMs && !isHighConf) {
+      logger.info(
+        { ageMins: Math.round(ageMs / 60000), lastId: lastSameDir.id, lastConf: lastSameDir.confidence, newConf: sig.confidenceScore },
+        'signal throttled (same direction cooldown 90m, conf <90)',
+      );
+      return null;
+    }
+  }
+
   if (!versionId) {
     logger.warn('no active strategy version — signal not persisted');
     return null;
