@@ -33,7 +33,7 @@ interface SignalRow {
   riskReward: string;
 }
 
-type SignalListResponse = { items: SignalRow[] };
+type SignalListResponse = { items: SignalRow[]; total?: number };
 
 export default function DashboardPage() {
   const { bid, ask, spreadPoints, brokerTimestampMs } = useMarketStore();
@@ -86,7 +86,17 @@ export default function DashboardPage() {
   });
   const { data: simData } = useQuery<SignalListResponse>({
     queryKey: ['signals', 'sim'],
-    queryFn: () => apiGet<SignalListResponse>('/signals?limit=200&offset=0'),
+    queryFn: async () => {
+      // ponytail: loop semua halaman (limit 200/request) — ganti ke endpoint khusus kalau >2k sinyal
+      const first = await apiGet<SignalListResponse>('/signals?limit=200&offset=0');
+      const items = [...first.items];
+      while (items.length < (first.total ?? 0)) {
+        const next = await apiGet<SignalListResponse>(`/signals?limit=200&offset=${items.length}`);
+        if (!next.items?.length) break;
+        items.push(...next.items);
+      }
+      return { items, total: items.length };
+    },
     refetchInterval: 60_000,
   });
   const t = terminals?.[0];
@@ -230,23 +240,32 @@ function EquitySim({ signals }: { signals?: SignalRow[] }) {
   const [riskPct, setRiskPct] = useState(1);
 
   const sim = useMemo(() => {
-    if (!signals) return null;
-    const closed = signals.filter(s => ['COMPLETED', 'TP1_HIT', 'TP2_HIT', 'FAILED', 'STOPPED'].includes(s.status));
-    // urut kronologis, compound
-    const trades = [...closed].reverse().map(s => {
-      const entry = Number(s.preferredEntry), sl = Number(s.stopLoss);
-      const risk = Math.abs(entry - sl);
-      if (risk === 0) return 0;
-      const win = s.status !== 'FAILED' && s.status !== 'STOPPED';
-      if (!win) return -1;
-      const tpIdx = s.status === 'TP2_HIT' ? 1 : 0;
-      const tp = s.takeProfits?.[tpIdx]?.price;
-      return tp != null ? Math.abs(Number(tp) - entry) / risk : 0;
-    });
-    let eq = deposit;
-    for (const r of trades) eq *= (1 + (riskPct / 100) * r);
-    const wins = trades.filter(r => r > 0).length;
-    return { n: trades.length, wins, final: eq, sumR: trades.reduce((a, b) => a + b, 0) };
+  if (!signals) return null;
+  const closed = signals.filter(s => ['COMPLETED', 'TP1_HIT', 'TP2_HIT', 'FAILED', 'STOPPED'].includes(s.status));
+  // urut kronologis, compound
+  const trades = [...closed].reverse().map(s => {
+  const entry = Number(s.preferredEntry), sl = Number(s.stopLoss);
+  const risk = Math.abs(entry - sl);
+  if (risk === 0) return { s, r: 0, pnl: 0, eqAfter: 0, eqBefore: 0 };
+  const win = s.status !== 'FAILED' && s.status !== 'STOPPED';
+  let r = -1;
+  if (win) {
+  const tpIdx = s.status === 'TP2_HIT' ? 1 : 0;
+  const tp = s.takeProfits?.[tpIdx]?.price;
+  r = tp != null ? Math.abs(Number(tp) - entry) / risk : 0;
+  }
+  return { s, r };
+  });
+  // compound + equity running
+  let eq = deposit;
+  const rows = trades.map(tr => {
+  const pnl = eq * (riskPct / 100) * tr.r;
+  const eqBefore = eq;
+  eq += pnl;
+  return { ...tr, pnl, eqBefore, eqAfter: eq };
+  });
+  const wins = rows.filter(x => x.r > 0).length;
+  return { rows, n: rows.length, wins, final: eq, sumR: rows.reduce((a, x) => a + x.r, 0) };
   }, [signals, deposit, riskPct]);
 
   if (!sim) return null;
@@ -287,6 +306,39 @@ function EquitySim({ signals }: { signals?: SignalRow[] }) {
         <span>Winrate {sim.n ? Math.round((sim.wins / sim.n) * 100) : 0}%</span>
         <span>Total {sim.sumR >= 0 ? '+' : ''}{sim.sumR.toFixed(2)}R</span>
         <span>{sim.wins}W / {sim.n - sim.wins}L</span>
+      </div>
+
+      <div className="border-t border-border overflow-x-auto">
+        <table className="w-full text-sm whitespace-nowrap">
+          <thead className="bg-muted/60 text-muted-foreground">
+            <tr>
+              <th className="text-left px-3 py-2">Time</th>
+              <th className="text-left px-3 py-2">Dir</th>
+              <th className="text-left px-3 py-2">Status</th>
+              <th className="text-right px-3 py-2">R</th>
+              <th className="text-right px-3 py-2">P/L</th>
+              <th className="text-right px-3 py-2">Equity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sim.rows.slice().reverse().map((row, i) => (
+              <tr key={`${row.s.id}-${i}`} className="border-t border-border hover:bg-muted/30">
+                <td className="px-3 py-2">
+                  <Link href={`/signals/${row.s.id}`} className="hover:underline">
+                    {new Date(row.s.detectedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}
+                  </Link>
+                </td>
+                <td className={`px-3 py-2 font-medium ${row.s.direction === 'LONG' ? 'text-bullish' : 'text-bearish'}`}>{row.s.direction}</td>
+                <td className="px-3 py-2"><StatusBadge status={row.s.status} /></td>
+                <td className={`px-3 py-2 text-right tabular-nums ${row.r >= 0 ? 'text-bullish' : 'text-bearish'}`}>{row.r >= 0 ? '+' : ''}{row.r.toFixed(2)}</td>
+                <td className={`px-3 py-2 text-right tabular-nums ${row.pnl >= 0 ? 'text-bullish' : 'text-bearish'}`}>
+                  {row.pnl >= 0 ? '+' : '-'}${Math.abs(row.pnl).toLocaleString('en-US', { maximumFractionDigits: 2 })}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">${row.eqAfter.toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );
