@@ -39,6 +39,7 @@ enum SignalStatus {
   TP2_HIT
   COMPLETED
   STOPPED
+  FAILED
 }
 
 enum MmxmModel {
@@ -424,6 +425,13 @@ model Notification {
   @@map("notifications")
 }
 
+model TelegramSubscriber {
+  chatId    String   @id
+  createdAt DateTime @default(now())
+
+  @@map("telegram_subscribers")
+}
+
 model Backtest {
   id                String          @id @default(uuid())
   strategyVersionId String
@@ -468,4 +476,18 @@ model AuditLog {
 
   @@index([createdAt(sort: Desc)])
   @@map("audit_logs")
+}
+
+model User {
+  id               String    @id @default(uuid())
+  email            String    @unique
+  passwordHash     String
+  emailVerifiedAt  DateTime?
+  verifyToken      String?   @unique
+  verifyExpiresAt  DateTime?
+  resetToken       String?   @unique
+  resetExpiresAt   DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@map("users")
 }

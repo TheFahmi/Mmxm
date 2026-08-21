@@ -5,7 +5,8 @@ import { createHash } from 'node:crypto';
 import { env } from './env.js';
 import { loadCandles } from './candles.js';
 import { logger } from './logger.js';
-import { notifySignal, notifyEvent, notifyInsight } from './notify.js';
+import { notifySignal, notifyEvent, notifyInsight, tgBroadcast, tgSendToChat, formatSignalText } from './notify.js';
+import { listSubscribers } from './telegram-bot.js';
 import { verifySignalWithLlm, detectSignalWithLlm } from './deepseek.js';
 
 /** Load active strategy config (falls back to defaults). */
@@ -319,6 +320,15 @@ export async function runAnalysis(
 
   publish('xauusd.signal.created', { id: created.id, direction: sig.direction, entry: sig.preferredEntry, confidence: sig.confidenceScore });
   void notifySignal(created.id, sig);
+  // Broadcast ke semua subscriber (filter confidence sudah di dalam notifySignal)
+  void (async () => {
+    try {
+      const subs = await listSubscribers(prisma);
+      if (subs.length) await tgBroadcast(formatSignalText(sig), subs);
+    } catch (e) {
+      logger.warn({ err: e instanceof Error ? e.message : String(e) }, 'telegram broadcast failed');
+    }
+  })();
 
   // DeepSeek verification (non-blocking; failure keeps the signal)
   void (async () => {

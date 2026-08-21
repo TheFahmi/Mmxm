@@ -3,21 +3,73 @@ import { env } from './env.js';
 import { logger } from './logger.js';
 
 /** Fire-and-forget Telegram message. Never throws. */
-async function tgSend(text: string): Promise<void> {
-  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
+async function tgSend(text: string, chatId?: string | number): Promise<boolean> {
+  const cid = chatId ?? env.TELEGRAM_CHAT_ID;
+  if (!env.TELEGRAM_BOT_TOKEN || !cid) return false;
   try {
     const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text, parse_mode: 'HTML' }),
+      body: JSON.stringify({ chat_id: cid, text, parse_mode: 'HTML' }),
     });
-    if (!r.ok) logger.warn({ status: r.status, body: await r.text() }, 'telegram send failed');
+    if (!r.ok) {
+      logger.warn({ status: r.status, body: await r.text() }, 'telegram send failed');
+      return false;
+    }
+    return true;
   } catch (e) {
     logger.warn({ err: e }, 'telegram send error');
+    return false;
   }
 }
 
-/** Notif sinyal baru — hanya confidence >= TELEGRAM_MIN_CONFIDENCE (default 75). */
+export async function tgSendToChat(text: string, chatId: string | number): Promise<boolean> {
+  return tgSend(text, chatId);
+}
+
+/** Kirim pesan + inline keyboard (reply_markup). */
+export async function tgSendButton(
+  text: string,
+  chatId: string | number,
+  replyMarkup: { inline_keyboard: { text: string; callback_data: string }[][] },
+): Promise<boolean> {
+  if (!env.TELEGRAM_BOT_TOKEN) return false;
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', reply_markup: replyMarkup }),
+    });
+    if (!r.ok) {
+      logger.warn({ status: r.status, body: await r.text() }, 'telegram send(button) failed');
+      return false;
+    }
+    return true;
+  } catch (e) {
+    logger.warn({ err: e }, 'telegram send(button) error');
+    return false;
+  }
+}
+
+export async function tgGetMe(): Promise<{ ok: boolean; username?: string }> {
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getMe`);
+    const j = (await r.json()) as { ok: boolean; result?: { username?: string } };
+    return { ok: j.ok, username: j.result?.username };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/**
+ * Kirim pesan ke SEMUA subscriber (list chat id), opsional tanpa filter confidence.
+ * Untuk event lifecycle (TP/SL) biasanya tetap terkirim ke semua.
+ */
+export async function tgBroadcast(text: string, chatIds: (string | number)[]): Promise<void> {
+  await Promise.allSettled(chatIds.map(cid => tgSend(text, cid)));
+}
+
+/** Notif sinyal baru — hanya confidence >= TELEGRAM_MIN_CONFIDENCE. */
 export async function notifySignal(signalId: string, sig: XauusdSignal): Promise<void> {
   if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
     logger.info({ signalId }, 'no notification channels configured');
@@ -30,7 +82,7 @@ export async function notifySignal(signalId: string, sig: XauusdSignal): Promise
   await tgSend(formatSignal(sig));
 }
 
-/** Notif event lifecycle dari track.ts (ACTIVE / TPx_HIT / COMPLETED / FAILED / INVALIDATED). */
+/** Notif event lifecycle dari track.ts. */
 export async function notifyEvent(
   s: Pick<XauusdSignal, 'direction' | 'preferredEntry' | 'stopLoss' | 'takeProfits'>,
   status: string,
@@ -71,7 +123,7 @@ export async function notifyEvent(
   await tgSend(text);
 }
 
-/** Notif AI Insight (MMAI verdict) — dikirim hanya kalau sinyal lolos min confidence. */
+/** Notif AI Insight (MMAI verdict). */
 export async function notifyInsight(
   s: Pick<XauusdSignal, 'direction' | 'confidenceScore'>,
   verdict: string,
@@ -92,6 +144,10 @@ export async function notifyInsight(
 }
 
 function formatSignal(s: XauusdSignal): string {
+  return formatSignalText(s);
+}
+
+export function formatSignalText(s: XauusdSignal): string {
   const tps = s.takeProfits
     .map(tp => `• TP${tp.level}: <code>${tp.price.toFixed(2)}</code> — close ${tp.allocationPercentage}%`)
     .join('\n');

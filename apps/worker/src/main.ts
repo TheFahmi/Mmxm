@@ -5,6 +5,9 @@ import { env } from './env.js';
 import { logger } from './logger.js';
 import { runAnalysis, type LlmVerdictStore } from './analyzer.js';
 import { runBacktest } from './backtest-runner.js';
+import { trackSignalOutcomes } from './track.js';
+import { runTelegramBot, listSubscribers } from './telegram-bot.js';
+import { tgBroadcast } from './notify.js';
 
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
 const prisma = new PrismaClient();
@@ -70,6 +73,13 @@ async function main() {
   // every 10 minutes — Muse 21s/cycle, hemat token 6x
   setInterval(() => void schedule(), 10 * 60_000);
   void schedule();
+
+  // track live signal outcomes against latest tick (1s resolution)
+  setInterval(() => void trackSignalOutcomes(prisma, publish), 1_000);
+  void trackSignalOutcomes(prisma, publish);
+
+  // Telegram bot: /start /stop /status /menu + subscriber list
+  void runTelegramBot(prisma);
 
   logger.info('worker started (signal-only)');
 }
