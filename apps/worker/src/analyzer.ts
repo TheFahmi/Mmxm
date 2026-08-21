@@ -85,12 +85,20 @@ export async function runAnalysis(
   if (!sig) {
     logger.debug({ why: out.debug.why, failed: out.debug.failed }, 'no signal (rule engine)');
     // LLM-first fallback: DeepSeek detects setup same candles.
+    // currentPrice WAJIB real-time (tick terbaru), bukan close candle — candle M15 bisa basi 15 menit
+    const latestTick = await prisma.tick.findFirst({
+      where: { canonicalSymbol: 'XAUUSD' },
+      orderBy: { brokerTsMs: 'desc' },
+    });
+    const livePrice = latestTick
+      ? (Number(latestTick.last) > 0 ? Number(latestTick.last) : Number(latestTick.bid))
+      : m15[m15.length - 1]?.close ?? 0;
     const llmSig = await detectSignalWithLlm(
       m15.slice(-12).map(c => ({ // reduce from 20 to 12 candles (3h vs 5h)
         openTime: c.openTime,
         open: c.open, high: c.high, low: c.low, close: c.close,
       })),
-      m15[m15.length - 1]?.close ?? 0,
+      livePrice,
     );
     if (!llmSig || llmSig.direction === 'NONE') {
       logger.debug('no signal (llm)');
@@ -110,6 +118,24 @@ export async function runAnalysis(
     const entry = llmSig.entry ?? 0;
     const sl = llmSig.stopLoss ?? 0;
     const risk = Math.abs(entry - sl);
+    // Sanity check real-time: entry harus reachable dari harga live.
+    // Sinyal dengan entry > 1.5xATR15 dari harga sekarang = stale (harga sudah lari) -> buang.
+    // Tanpa ini: sinyal lahir saat harga jauh di luar zone -> instan ACTIVE + TP palsu (kasus 2ff8dc88).
+    const atr15 = (() => {
+      const c = m15.slice(-15);
+      if (c.length < 2) return 5;
+      let sum = 0;
+      for (let i = 1; i < c.length; i++) {
+        const cur = c[i]!;
+        const prevClose = Number(c[i - 1]!.close);
+        sum += Math.max(Number(cur.high) - Number(cur.low), Math.abs(Number(cur.high) - prevClose), Math.abs(Number(cur.low) - prevClose));
+      }
+      return sum / (c.length - 1) || 5;
+    })();
+    if (livePrice > 0 && risk > 0 && Math.abs(entry - livePrice) > 1.5 * atr15) {
+      logger.info({ entry, livePrice, dist: Math.abs(entry - livePrice), atr15 }, 'llm signal rejected: stale entry (too far from live price)');
+      return null;
+    }
     sig = {
       id: `llm-${Date.now()}`,
       symbol: 'XAUUSD',
