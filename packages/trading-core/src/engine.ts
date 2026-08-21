@@ -184,16 +184,27 @@ export function analyze(input: MmxmAnalysisInput, strategyVersion: string): Engi
   else if (o) { entryMin = o.low; entryMax = o.high; }
   else return { signal: null, reasons, debug: { ...debug, why: 'no_entry_zone' } };
 
+  // Entry-zone freshness: zone must be reachable from current price, else it's stale
+  // (price already traded through/away from the gap — waiting for a touch is pointless).
+  const zoneDist = direction === 'LONG'
+    ? Math.max(entryMin - price, price - entryMax, 0) // distance from price to zone (0 if inside)
+    : Math.max(price - entryMax, entryMin - price, 0);
+  const maxZoneDist = cfg.atrPeriod > 0 ? atrNow15 * 5.0 : 0; // ponytail: 3×ATR(M15) ceiling — tune after backtest
+  if (zoneDist > maxZoneDist) {
+    return { signal: null, reasons, debug: { ...debug, why: 'stale_entry_zone', zoneDist, maxZoneDist } };
+  }
+
   const preferredEntry = (entryMin + entryMax) / 2;
   const slBuffer = cfg.stopLossBufferAtr * atrNow5;
   const stopLoss = direction === 'LONG' ? entryMin - slBuffer : entryMax + slBuffer;
   const risk = Math.abs(preferredEntry - stopLoss);
   if (risk <= 0) return { signal: null, reasons, debug: { ...debug, why: 'zero_risk' } };
 
-  // targets: opposing liquidity
+  // targets: opposing liquidity — must be beyond CURRENT price, not just the entry
+  // (a SHORT whose TP1 is already below current price = move already spent → stale)
   const opposing = liq.filter(l => direction === 'LONG'
-    ? (l.type.endsWith('HIGH') || l.type === 'PDH' || l.type === 'PWH') && l.price > preferredEntry
-    : (l.type.endsWith('LOW') || l.type === 'PDL' || l.type === 'PWL') && l.price < preferredEntry,
+    ? (l.type.endsWith('HIGH') || l.type === 'PDH' || l.type === 'PWH') && l.price > preferredEntry && l.price > price
+    : (l.type.endsWith('LOW') || l.type === 'PDL' || l.type === 'PWL') && l.price < preferredEntry && l.price < price,
   ).sort((a, b) => direction === 'LONG' ? a.price - b.price : b.price - a.price);
 
   const tps = opposing.slice(0, 3).map((l, i) => ({
