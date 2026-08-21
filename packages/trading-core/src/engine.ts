@@ -113,12 +113,18 @@ export function analyze(input: MmxmAnalysisInput, strategyVersion: string): Engi
   const freshObs = obs.filter(o => !o.mitigated);
 
   // determine model
+  const sweptLow = sweptLevels.some(s => s.type.endsWith('LOW') || s.type === 'PDL' || s.type === 'PWL');
+  const sweptHigh = sweptLevels.some(s => s.type.endsWith('HIGH') || s.type === 'PDH' || s.type === 'PWH');
   const model: MmxmModel | null =
-    bias === 'BULLISH' && sweptLevels.some(s => s.type.endsWith('LOW') || s.type === 'PDL' || s.type === 'PWL')
+    bias === 'BULLISH' && sweptLow
       ? 'MARKET_MAKER_BUY_MODEL'
-      : bias === 'BEARISH' && sweptLevels.some(s => s.type.endsWith('HIGH') || s.type === 'PDH' || s.type === 'PWH')
+      : bias === 'BEARISH' && sweptHigh
         ? 'MARKET_MAKER_SELL_MODEL'
-        : null;
+        : bias === 'BULLISH' && sweptHigh
+          ? 'MARKET_MAKER_BUY_MODEL' // continuation
+          : bias === 'BEARISH' && sweptLow
+            ? 'MARKET_MAKER_SELL_MODEL' // continuation
+            : null;
 
   if (!model) return { signal: null, reasons, debug: { ...debug, why: 'no_model' } };
   const direction = model === 'MARKET_MAKER_BUY_MODEL' ? 'LONG' : 'SHORT';
@@ -130,9 +136,9 @@ export function analyze(input: MmxmAnalysisInput, strategyVersion: string): Engi
     code: 'HTF_BIAS_OR_ZONE', desc: direction === 'LONG' ? 'HTF bullish or discount' : 'HTF bearish or premium',
     weight: 20, evidence: [],
   });
-  const sweptOk = direction === 'LONG'
-    ? sweptLevels.some(s => s.type.endsWith('LOW') || s.type === 'PDL' || s.type === 'PWL' || s.type === 'ASIA_LOW' || s.type === 'LONDON_LOW' || s.type === 'NEW_YORK_LOW')
-    : sweptLevels.some(s => s.type.endsWith('HIGH') || s.type === 'PDH' || s.type === 'PWH' || s.type === 'ASIA_HIGH' || s.type === 'LONDON_HIGH' || s.type === 'NEW_YORK_HIGH');
+  // model gate sudah menentukan arah dari pasangan bias+sweep; di sini cukup pastikan
+  // ADA bukti liquidity sweep (reversal: sisi berlawanan; continuation: sisi searah)
+  const sweptOk = sweptLow || sweptHigh;
   checks.push({
     ok: sweptOk, code: 'LIQUIDITY_SWEPT',
     desc: direction === 'LONG' ? 'sell-side liquidity swept' : 'buy-side liquidity swept',
@@ -163,9 +169,9 @@ export function analyze(input: MmxmAnalysisInput, strategyVersion: string): Engi
   });
   const zoneSideOk = direction === 'LONG' ? inDiscount : inPremium;
   checks.push({
-    ok: zoneSideOk, code: 'PREMIUM_DISCOUNT',
-    desc: direction === 'LONG' ? 'entry in discount' : 'entry in premium',
-    weight: 10, evidence: [],
+    ok: true, code: 'PREMIUM_DISCOUNT', // ponytail: non-blocking (info only) — blocking PD membuat engine diam saat trend kuat; kembalikan ke zoneSideOk jika mau ketat
+    desc: `${direction === 'LONG' ? 'entry in discount' : 'entry in premium'} (${zoneSideOk ? 'yes' : 'no'})`,
+    weight: zoneSideOk ? 10 : 0, evidence: [],
   });
 
   for (const c of checks) {
