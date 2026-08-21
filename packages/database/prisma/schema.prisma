@@ -361,6 +361,7 @@ model Signal {
   entryMax          Decimal         @db.Decimal(20, 8)
   preferredEntry    Decimal         @db.Decimal(20, 8)
   stopLoss          Decimal         @db.Decimal(20, 8)
+  managedStop       Decimal?        @db.Decimal(20, 8) // SL efektif setelah auto-BE/trailing (null = pakai stopLoss)
   takeProfits       Json
   riskReward        Decimal         @db.Decimal(10, 2)
   confidence        Int

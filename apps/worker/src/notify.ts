@@ -109,9 +109,12 @@ export async function notifyEvent(
     case 'FAILED':
       text = `🛑 <b>SL HIT</b> — ${dir}\n❌ Close @ <code>${px(payload.price)}</code> (−1R)\n⚠️ Menunggu setup valid berikutnya.`;
       break;
+    case 'BE_APPLIED':
+      text = `🔒 <b>SL ke BREAKEVEN</b> — ${dir}\n💰 SL digeser ke entry <code>${px(payload.price)}</code>\n✅ TP1 sudah ter-close 25% — sisa posisi aman dari loss`;
+      break;
     case 'STOPPED': {
       const hitTp = s.takeProfits.filter(tp => (payload.level ?? 0) >= tp.level).length;
-      text = `⚖️ <b>TRAILING STOP</b> — ${dir}\n❌ Close @ <code>${px(payload.price)}</code>\n✅ Pernah hit ${hitTp} TP sebelum stop\n📈 Status: STOPPED`;
+      text = `⚖️ <b>STOPPED (BE/trailing)</b> — ${dir}\n❌ Close @ <code>${px(payload.price)}</code>\n✅ Sudah terkunci profit (auto-BE setelah TP1)\n📈 Status: STOPPED`;
       break;
     }
     case 'INVALIDATED':

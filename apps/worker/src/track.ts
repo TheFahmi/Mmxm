@@ -34,6 +34,8 @@ export async function trackSignalOutcomes(prisma: PrismaClient, publish: Publish
   for (const s of open) {
     const long = s.direction === 'LONG';
     const sl = Number(s.stopLoss);
+    // SL efektif: managedStop (auto-BE/trailing) kalau ada, else stopLoss awal
+    const effSl = s.managedStop != null ? Number(s.managedStop) : sl;
     const entryMin = Number(s.entryMin);
     const entryMax = Number(s.entryMax);
     const tps = ((s.takeProfits as unknown as TpLevel[]) ?? [])
@@ -68,7 +70,7 @@ export async function trackSignalOutcomes(prisma: PrismaClient, publish: Publish
     }
 
     const inEntryZone = price >= Math.min(entryMin, entryMax) && price <= Math.max(entryMin, entryMax);
-    const slHit = long ? price <= sl : price >= sl;
+    const slHit = long ? price <= effSl : price >= effSl;
 
     // ACTIVE: hanya jika harga BENAR-BENAR masuk entry zone.
     // Tidak ada jalur "crossedEntry" — harga yang sudah lewat zone tanpa menyentuhnya
@@ -84,29 +86,46 @@ export async function trackSignalOutcomes(prisma: PrismaClient, publish: Publish
       continue;
     }
 
-    // post-entry SL hit -> FAILED (ACTIVE) or STOPPED (after TP hit)
+    // post-entry SL hit -> FAILED (ACTIVE) or STOPPED (after TP hit / BE managed)
     // Kena SL harus stop — jangan biarkan TP1_HIT/TP2_HIT nge-block sinyal baru
     if (s.status === 'ACTIVE' && slHit) {
       await transition('FAILED', 'xauusd.signal.closed', { reason: 'SL hit' });
       continue;
     }
-    // TP1_HIT/TP2_HIT yang kena SL biarkan stay TPx_HIT (partial profit) — jangan STOPPED
-    // Kalau mau stop, cuma untuk yang belum TP sama sekali
+    // TP1_HIT/TP2_HIT yang kena managedStop (auto-BE/trailing) -> STOPPED,
+    // bila belum ada managedStop (masih SL awal) biarkan stay TPx_HIT (partial profit terkunci)
+    if ((s.status === 'TP1_HIT' || s.status === 'TP2_HIT') && slHit && s.managedStop != null) {
+      await transition('STOPPED', 'xauusd.signal.closed', {
+        reason: 'managed stop (BE/trailing) hit',
+        level: s.status === 'TP1_HIT' ? 1 : 2,
+      });
+      continue;
+    }
 
-    // TP progression
+    // TP progression + apply auto-BE setelah TP1 hit
     if (['ACTIVE', 'TP1_HIT', 'TP2_HIT'].includes(s.status)) {
       const hit = tps.filter(t => (long ? price >= t.price : price <= t.price));
       const maxLevel = hit.length ? Math.max(...hit.map(t => t.level)) : 0;
       const currentLevel = s.status === 'ACTIVE' ? 0 : s.status === 'TP1_HIT' ? 1 : s.status === 'TP2_HIT' ? 2 : 3;
-      
+
       // Emit each newly-hit TP level (not just highest). TP3 -> COMPLETED
-      // Use while-loop so all levels between currentLevel+1 and maxLevel emit,
-      // including backfill when multiple were skipped.
       let level = currentLevel + 1;
       while (level <= maxLevel) {
         const to = level >= 3 ? 'COMPLETED' : `TP${level}_HIT`;
         await transition(to, 'xauusd.signal.tp', { level, price: hit.find(t => t.level === level)?.price });
         level++;
+      }
+      // Auto-BE: begitu TP1 HIT (baru masuk level ini), geser SL ke entry (breakeven)
+      if ((s.status === 'ACTIVE' && maxLevel >= 1) && s.managedStop == null) {
+        const be = Number(s.preferredEntry);
+        await prisma.signal.update({ where: { id: s.id }, data: { managedStop: be } });
+        publish('xauusd.signal.be', { id: s.id, price: be });
+        void notifyEvent(
+          { direction: s.direction, preferredEntry: Number(s.preferredEntry), stopLoss: sl, takeProfits: tps.map(t => ({ level: t.level as 1 | 2 | 3, price: t.price, allocationPercentage: 0, liquidityTarget: '' })) },
+          'BE_APPLIED',
+          { price: be },
+        );
+        logger.info({ id: s.id, be }, 'auto-BE applied after TP1');
       }
     }
   }
