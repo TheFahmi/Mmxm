@@ -31,7 +31,7 @@ interface SignalDetail {
   takeProfits: { level: number; price: number; allocationPercentage: number; liquidityTarget?: string }[];
   invalidationRules: { type: string; description: string; priceLevel?: number | null; timeframe?: string | null }[];
   reasons: { code: string; description: string; weight: string; evidenceCandleIds: string[] }[];
-  events: { id: string; fromStatus: string; toStatus: string; createdAt: string }[];
+  events: { id: string; fromStatus: string; toStatus: string; payload?: { level?: number } | null; createdAt: string }[];
   notifications: { id: string; channel: string; status: string; error: string | null; createdAt: string }[];
   detectedAt: string;
   confirmedAt: string | null;
@@ -80,17 +80,36 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
               <h2 className="font-semibold mb-2">Take Profits</h2>
               <div className="overflow-x-auto"><table className="w-full text-sm whitespace-nowrap">
                 <thead className="text-muted-foreground text-left">
-                  <tr><th className="py-1">TP</th><th>Price</th><th>Alloc</th><th>Liquidity Target</th></tr>
+                  <tr><th className="py-1">TP</th><th>Price</th><th>Alloc</th><th>Liquidity Target</th><th>Status</th></tr>
                 </thead>
                 <tbody>
-                  {s.takeProfits.map(tp => (
+                  {s.takeProfits.map(tp => {
+                    // Derive hit TPs from lifecycle events; TP3 emits COMPLETED (payload.level=3), not TP3_HIT
+                    const hitEvents = s.events.filter(e => e.toStatus.startsWith('TP') && e.toStatus.endsWith('_HIT'));
+                    const hitLevels = hitEvents.map(e => Number(e.toStatus.match(/TP(\d+)_HIT/)?.[1] ?? '0'));
+                    const completed = s.events.find(e => e.toStatus === 'COMPLETED');
+                    const completedLevel = completed ? Number(completed.payload?.level ?? 0) : 0;
+                    const hit = hitLevels.includes(tp.level) || (completedLevel >= tp.level);
+                    return (
                     <tr key={tp.level} className="border-t border-border tabular-nums">
                       <td className="py-1">TP{tp.level}</td>
                       <td>{Number(tp.price).toFixed(2)}</td>
                       <td>{tp.allocationPercentage}%</td>
                       <td className="text-muted-foreground">{tp.liquidityTarget ?? '—'}</td>
+                      <td>
+                        {hit ? (
+                          <span className="inline-flex items-center gap-1 text-bullish">
+                            <span className="material-symbols-outlined text-[15px]">check_circle</span> Hit
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-muted-foreground">
+                            <span className="material-symbols-outlined text-[15px]">radio_button_unchecked</span> Pending
+                          </span>
+                        )}
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table></div>
             </section>
