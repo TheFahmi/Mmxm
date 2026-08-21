@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '@/lib/api';
 import { useWsEvent } from '@/lib/ws';
-import { useMarketStore } from '@/stores/market';
+import { useMarketStore, formatWibTime } from '@/stores/market';
 import { Nav } from '@/components/nav';
 import { StatCard, StatusBadge } from '@/components/ui';
 import Link from 'next/link';
@@ -36,7 +36,7 @@ interface SignalRow {
 type SignalListResponse = { items: SignalRow[] };
 
 export default function DashboardPage() {
-  const { bid, ask, spreadPoints, lastTickAt } = useMarketStore();
+  const { bid, ask, spreadPoints, brokerTimestampMs } = useMarketStore();
   const setTick = useMarketStore(s => s.setTick);
 
   const wsConnected = useWsEvent<{ bid: number; ask: number; spreadPoints: number; brokerTimestampMs: number }>(
@@ -76,6 +76,19 @@ export default function DashboardPage() {
     refetchInterval: 15_000,
   });
   const signals = signalsData?.items ?? [];
+
+  const { data: winRateData } = useQuery<{
+    win: number; loss: number; total: number; winRate: number;
+  }>({
+    queryKey: ['signals', 'winrate'],
+    queryFn: () => apiGet<{ win: number; loss: number; total: number; winRate: number }>('/signals/stats/winrate'),
+    refetchInterval: 30_000,
+  });
+  const { data: simData } = useQuery<SignalListResponse>({
+    queryKey: ['signals', 'sim'],
+    queryFn: () => apiGet<SignalListResponse>('/signals?limit=200&offset=0'),
+    refetchInterval: 60_000,
+  });
   const t = terminals?.[0];
 
   return (
@@ -83,9 +96,10 @@ export default function DashboardPage() {
       <Nav />
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Bid" value={bid?.toFixed(2) ?? '—'} sub={lastTickAt ? `tick ${new Date(lastTickAt).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB` : 'waiting'} />
+          <StatCard label="Bid" value={bid?.toFixed(2) ?? '—'} sub={brokerTimestampMs ? `tick ${formatWibTime(brokerTimestampMs)} WIB` : 'waiting'} />
           <StatCard label="Ask" value={ask?.toFixed(2) ?? '—'} />
           <StatCard label="Spread (pts)" value={spreadPoints ?? '—'} tone={spreadPoints != null && spreadPoints > 50 ? 'red' : 'default'} />
+          <StatCard label="Win Rate" value={winRateData ? `${winRateData.winRate}%` : '—'} sub={winRateData ? `${winRateData.win} W / ${winRateData.loss} L / ${winRateData.total}` : '—'} />
           <StatCard
             label="MT5 Terminal"
             value={t ? <StatusBadge status={t.computedStatus} /> : '—'}
@@ -203,8 +217,78 @@ export default function DashboardPage() {
             </table>
           </div>
         </section>
+
+        <EquitySim signals={simData?.items} />
       </main>
     </>
+  );
+}
+
+// ponytail: client-side sim dari 200 sinyal terakhir; pindah ke endpoint /stats/equity kalau perlu >200
+function EquitySim({ signals }: { signals?: SignalRow[] }) {
+  const [deposit, setDeposit] = useState(1000);
+  const [riskPct, setRiskPct] = useState(1);
+
+  const sim = useMemo(() => {
+    if (!signals) return null;
+    const closed = signals.filter(s => ['COMPLETED', 'TP1_HIT', 'TP2_HIT', 'FAILED', 'STOPPED'].includes(s.status));
+    // urut kronologis, compound
+    const trades = [...closed].reverse().map(s => {
+      const entry = Number(s.preferredEntry), sl = Number(s.stopLoss);
+      const risk = Math.abs(entry - sl);
+      if (risk === 0) return 0;
+      const win = s.status !== 'FAILED' && s.status !== 'STOPPED';
+      if (!win) return -1;
+      const tpIdx = s.status === 'TP2_HIT' ? 1 : 0;
+      const tp = s.takeProfits?.[tpIdx]?.price;
+      return tp != null ? Math.abs(Number(tp) - entry) / risk : 0;
+    });
+    let eq = deposit;
+    for (const r of trades) eq *= (1 + (riskPct / 100) * r);
+    const wins = trades.filter(r => r > 0).length;
+    return { n: trades.length, wins, final: eq, sumR: trades.reduce((a, b) => a + b, 0) };
+  }, [signals, deposit, riskPct]);
+
+  if (!sim) return null;
+  const profit = sim.final - deposit;
+  return (
+    <section className="rounded-lg border border-border bg-card overflow-hidden">
+      <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border bg-muted/30">
+        <span className="h-7 w-7 rounded-md bg-primary text-background grid place-items-center shrink-0">
+          <span className="material-symbols-outlined text-[16px]">trending_up</span>
+        </span>
+        <div>
+          <h2 className="text-sm font-semibold leading-none">Simulasi Equity</h2>
+          <p className="text-[11px] text-muted-foreground">Compound dari {sim.n} sinyal closed terakhir · bukan financial advice</p>
+        </div>
+      </div>
+      <div className="px-4 py-4 flex flex-wrap items-end gap-4">
+        <label className="text-xs text-muted-foreground">
+          <div className="mb-1">Deposit ($)</div>
+          <input type="number" min={1} value={deposit} onChange={e => setDeposit(Math.max(1, Number(e.target.value) || 1))}
+            className="w-28 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground tabular-nums" />
+        </label>
+        <label className="text-xs text-muted-foreground">
+          <div className="mb-1">Risk / trade (%)</div>
+          <input type="number" min={0.1} step={0.1} value={riskPct} onChange={e => setRiskPct(Math.max(0.1, Number(e.target.value) || 0.1))}
+            className="w-28 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground tabular-nums" />
+        </label>
+        <div className="ml-auto text-right">
+          <div className="text-[11px] text-muted-foreground">Equity akhir</div>
+          <div className={`text-2xl font-bold tabular-nums ${profit >= 0 ? 'text-bullish' : 'text-bearish'}`}>
+            ${sim.final.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+          </div>
+          <div className={`text-xs tabular-nums ${profit >= 0 ? 'text-bullish' : 'text-bearish'}`}>
+            {profit >= 0 ? '+' : ''}{profit.toLocaleString('en-US', { maximumFractionDigits: 0 })} ({((profit / deposit) * 100).toFixed(1)}%)
+          </div>
+        </div>
+      </div>
+      <div className="px-4 pb-3 flex gap-4 text-[11px] text-muted-foreground tabular-nums">
+        <span>Winrate {sim.n ? Math.round((sim.wins / sim.n) * 100) : 0}%</span>
+        <span>Total {sim.sumR >= 0 ? '+' : ''}{sim.sumR.toFixed(2)}R</span>
+        <span>{sim.wins}W / {sim.n - sim.wins}L</span>
+      </div>
+    </section>
   );
 }
 
