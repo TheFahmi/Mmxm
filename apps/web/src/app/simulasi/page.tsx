@@ -12,7 +12,9 @@ interface SignalRow {
   direction: 'LONG' | 'SHORT';
   status: string;
   preferredEntry: string;
+  confidence: number;
   detectedAt: string;
+  aiInsight: { verdict: 'AGREE' | 'DISAGREE' | 'NEUTRAL' } | null;
   takeProfits: { level: number; price: number }[];
   stopLoss: string;
 }
@@ -50,8 +52,14 @@ export default function SimulasiPage() {
           if (!next.items?.length) break;
           items.push(...next.items);
         }
-        const closed = items.filter(s => ['COMPLETED', 'TP1_HIT', 'TP2_HIT', 'FAILED', 'STOPPED'].includes(s.status));
-        return { items: closed, total: closed.length };
+        const CLOSED = ['COMPLETED', 'TP1_HIT', 'TP2_HIT', 'FAILED', 'STOPPED'];
+        const minConf = CONFIDENCE[confIdx]?.min ?? 0;
+        const filtered = items.filter(s =>
+          CLOSED.includes(s.status)
+          && (!verdict || s.aiInsight?.verdict === verdict)
+          && s.confidence >= minConf
+        );
+        return { items: filtered, total: filtered.length };
       }
       if (status) params.set('status', status);
       if (verdict) params.set('verdict', verdict);
