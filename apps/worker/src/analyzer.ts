@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { env } from './env.js';
 import { loadCandles } from './candles.js';
 import { logger } from './logger.js';
-import { notifySignal } from './notify.js';
+import { notifySignal, notifyEvent, notifyInsight } from './notify.js';
 import { verifySignalWithLlm, detectSignalWithLlm } from './deepseek.js';
 
 /** Load active strategy config (falls back to defaults). */
@@ -345,6 +345,8 @@ export async function runAnalysis(
           },
         });
         logger.info({ id: created.id, verdict: insight.verdict }, 'llm verified signal');
+        // AI Insight ke Telegram (ikut aturan min confidence sinyal)
+        void notifyInsight(sig, insight.verdict, insight.summary, insight.suggestion);
       }
     } catch (e) {
       logger.warn({ err: e instanceof Error ? e.message : String(e) }, 'llm verify post-signal error');

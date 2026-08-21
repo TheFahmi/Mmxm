@@ -1,5 +1,6 @@
 import { PrismaClient, SignalStatus } from '@mmxm/database';
 import { logger } from './logger.js';
+import { notifyEvent } from './notify.js';
 
 type Publish = (event: string, data: unknown) => void;
 
@@ -51,6 +52,11 @@ export async function trackSignalOutcomes(prisma: PrismaClient, publish: Publish
         },
       });
       publish(eventName, { id: s.id, status: to, price });
+      void notifyEvent(
+        { direction: s.direction, preferredEntry: Number(s.preferredEntry), stopLoss: sl, takeProfits: tps.map(t => ({ level: t.level as 1 | 2 | 3, price: t.price, allocationPercentage: 0, liquidityTarget: '' })) },
+        to,
+        { level: payload.level as number | undefined, price },
+      );
       logger.info({ id: s.id, price, to, fromStatus }, `signal ${to}`);
       curStatus = to;
     };

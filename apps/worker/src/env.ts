@@ -10,11 +10,13 @@ const schema = z.object({
   MIN_CANDLES_M5: z.coerce.number().default(100),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_CHAT_ID: z.string().optional(),
+  TELEGRAM_MIN_CONFIDENCE: z.coerce.number().default(75),
   NOTIFICATION_WEBHOOK_URL: z.string().optional(),
   DEEPSEEK_ENABLED: z.enum(['true', 'false']).default('false').transform(v => v === 'true'),
   DEEPSEEK_BASE_URL: z.string().default('https://llm.mfah.me/v1'),
   DEEPSEEK_API_KEY: z.string().default(''),
   DEEPSEEK_MODEL: z.string().default('deepseek-v4-flash'),
+  DEEPSEEK_FALLBACK_MODELS: z.string().default('deepseek-v4-flash,qwen3.8-max,muse-spark-1.2'),
   DEEPSEEK_TIMEOUT_MS: z.coerce.number().default(60_000),
 });
 
