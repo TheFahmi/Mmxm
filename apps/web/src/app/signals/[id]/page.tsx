@@ -78,6 +78,9 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
 
             <section className="rounded-lg border border-border p-4">
               <h2 className="font-semibold mb-2">Take Profits</h2>
+              <p className="text-xs text-muted-foreground mb-2">
+                Partial close plan: TP1 close 25% · TP2 close 25% · TP3 close sisa 50%
+              </p>
               <div className="overflow-x-auto"><table className="w-full text-sm whitespace-nowrap">
                 <thead className="text-muted-foreground text-left">
                   <tr><th className="py-1">TP</th><th>Price</th><th>Alloc</th><th>Liquidity Target</th><th>Status</th></tr>
@@ -94,7 +97,12 @@ export default function SignalDetailPage({ params }: { params: Promise<{ id: str
                     <tr key={tp.level} className="border-t border-border tabular-nums">
                       <td className="py-1">TP{tp.level}</td>
                       <td>{Number(tp.price).toFixed(2)}</td>
-                      <td>{tp.allocationPercentage}%</td>
+                      <td>
+                        {tp.allocationPercentage}%
+                        {hit && tp.level < 3 && (
+                          <span className="text-muted-foreground"> (sisa {[0, 75, 50][tp.level]}%)</span>
+                        )}
+                      </td>
                       <td className="text-muted-foreground">{tp.liquidityTarget ?? '—'}</td>
                       <td>
                         {hit ? (
