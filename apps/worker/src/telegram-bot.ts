@@ -40,6 +40,28 @@ export async function sendMenu(prisma: PrismaClient, cid: string): Promise<void>
   await tgSendButton('🍔 <b>Menu</b> — pilih aksi:', cid, BURGER.reply_markup);
 }
 
+/** Register commands ke tombol ☰ (burger menu) Telegram — sekali saat startup. */
+export async function registerCommands(): Promise<void> {
+  if (!env.TELEGRAM_BOT_TOKEN) return;
+  const commands = [
+    { command: 'menu', description: '📋 Buka menu' },
+    { command: 'status', description: 'ℹ️ Cek langganan sinyal' },
+    { command: 'start', description: '✅ Daftar terima sinyal' },
+    { command: 'stop', description: '🛑 Berhenti terima sinyal' },
+  ];
+  try {
+    const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/setMyCommands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commands }),
+    });
+    const j = (await r.json()) as { ok: boolean };
+    logger.info({ ok: j.ok }, 'telegram setMyCommands');
+  } catch (e) {
+    logger.warn({ err: e instanceof Error ? e.message : String(e) }, 'telegram setMyCommands failed');
+  }
+}
+
 async function handleMessage(prisma: PrismaClient, chatId: string | number, text: string): Promise<void> {
   const cid = String(chatId);
   const cmd = (text ?? '').trim().split(/\s+/)[0] ?? '';
@@ -111,6 +133,7 @@ export async function runTelegramBot(prisma: PrismaClient): Promise<void> {
     return;
   }
   logger.info({ username: me.username }, 'telegram bot polling started');
+  await registerCommands();
 
   let offset = 0;
   const poll = async () => {
