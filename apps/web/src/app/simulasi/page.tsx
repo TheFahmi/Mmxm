@@ -22,15 +22,21 @@ type SignalListResponse = { items: SignalRow[]; total?: number };
 export default function SimulasiPage() {
   const [deposit, setDeposit] = useState(1000);
   const [riskPct, setRiskPct] = useState(1);
+  const [agreeOnly, setAgreeOnly] = useState(false);
+  const [confidentOnly, setConfidentOnly] = useState(false);
 
   const { data, isLoading } = useQuery<SignalListResponse>({
-    queryKey: ['signals', 'sim'],
+    queryKey: ['signals', 'sim', agreeOnly, confidentOnly],
     queryFn: async () => {
       // ponytail: loop semua halaman (limit 200/request) — ganti ke endpoint khusus kalau >2k sinyal
-      const first = await apiGet<SignalListResponse>('/signals?limit=200&offset=0');
+      const params = new URLSearchParams({ limit: '200', offset: '0' });
+      if (agreeOnly) params.set('verdict', 'AGREE');
+      if (confidentOnly) params.set('minConf', '90');
+      const qs = params.toString();
+      const first = await apiGet<SignalListResponse>(`/signals?${qs}`);
       const items = [...first.items];
       while (items.length < (first.total ?? 0)) {
-        const next = await apiGet<SignalListResponse>(`/signals?limit=200&offset=${items.length}`);
+        const next = await apiGet<SignalListResponse>(`/signals?limit=200&offset=${items.length}&${qs}`);
         if (!next.items?.length) break;
         items.push(...next.items);
       }
@@ -88,6 +94,14 @@ export default function SimulasiPage() {
               <div className="mb-1">Risk / trade (%)</div>
               <input type="number" min={0.1} step={0.1} value={riskPct} onChange={e => setRiskPct(Math.max(0.1, Number(e.target.value) || 0.1))}
                 className="w-28 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground tabular-nums" />
+            </label>
+            <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer pb-1">
+              <input type="checkbox" checked={agreeOnly} onChange={e => setAgreeOnly(e.target.checked)} className="accent-[hsl(28,90%,55%)]" />
+              AI Agree
+            </label>
+            <label className="flex items-center gap-2 text-xs text-foreground cursor-pointer pb-1">
+              <input type="checkbox" checked={confidentOnly} onChange={e => setConfidentOnly(e.target.checked)} className="accent-[hsl(28,90%,55%)]" />
+              AI Confident (≥90)
             </label>
             <div className="ml-auto text-right">
               <div className="text-[11px] text-muted-foreground">Equity akhir</div>
