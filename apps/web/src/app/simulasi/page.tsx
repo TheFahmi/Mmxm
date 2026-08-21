@@ -35,6 +35,8 @@ export default function SimulasiPage() {
   const [deposit, setDeposit] = useState(1000);
   const [riskPct, setRiskPct] = useState(1);
   const [maxLot, setMaxLot] = useState(1);
+  const [fixedMode, setFixedMode] = useState(false);
+  const [fixedLot, setFixedLot] = useState(0.01);
   const [status, setStatus] = useState('CLOSED');
   const [verdict, setVerdict] = useState('');
   const [confIdx, setConfIdx] = useState(0);
@@ -96,17 +98,19 @@ export default function SimulasiPage() {
     });
     let eq = deposit;
     const rows = trades.map(tr => {
-      const riskDollar = eq * (riskPct / 100);
-      const idealLot = tr.slDist > 0 ? riskDollar / (tr.slDist * 100) : 0;
-      const lot = Math.min(idealLot, maxLot);
+      const lot = fixedMode
+        ? Math.max(0.01, fixedLot)
+        : Math.min(tr.slDist > 0 ? (eq * (riskPct / 100)) / (tr.slDist * 100) : 0, maxLot);
       const pnl = lot * tr.slDist * 100 * tr.r;
       eq += pnl;
       return { ...tr, lot, pnl, eqAfter: eq };
     });
     const wins = rows.filter(x => x.r > 0).length;
-    const lotCapped = rows.filter(x => x.slDist > 0 && x.lot >= maxLot && x.lot > 0).length;
+    const lotCapped = fixedMode
+      ? 0
+      : rows.filter(x => x.slDist > 0 && x.lot >= maxLot && x.lot > 0).length;
     return { rows, n: rows.length, wins, final: eq, sumR: rows.reduce((a, x) => a + x.r, 0), lotCapped };
-  }, [data, deposit, riskPct, maxLot]);
+  }, [data, deposit, riskPct, maxLot, fixedMode, fixedLot]);
 
   const profit = sim ? sim.final - deposit : 0;
 
@@ -181,11 +185,35 @@ export default function SimulasiPage() {
               <input type="number" min={0.1} step={0.1} value={riskPct} onChange={e => setRiskPct(Math.max(0.1, Number(e.target.value) || 0.1))}
                 className="w-28 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground tabular-nums" />
             </label>
-            <label className="text-xs text-muted-foreground">
-              <div className="mb-1">Max lot</div>
-              <input type="number" min={0.01} step={0.01} value={maxLot} onChange={e => setMaxLot(Math.max(0.01, Number(e.target.value) || 0.01))}
-                className="w-24 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground tabular-nums" />
-            </label>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="mb-0 self-end">Sizing</div>
+              <div className="flex gap-0.5 rounded-lg border border-border bg-background p-0.5">
+                {[['Dinamis', false], ['Fixed lot', true]].map(([label, val]) => (
+                  <button
+                    key={String(label)}
+                    onClick={() => setFixedMode(val as boolean)}
+                    className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                      fixedMode === val ? 'bg-amber-500 text-black font-semibold' : 'hover:bg-muted'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {fixedMode ? (
+              <label className="text-xs text-muted-foreground">
+                <div className="mb-1">Lot (fixed)</div>
+                <input type="number" min={0.01} step={0.01} value={fixedLot} onChange={e => setFixedLot(Math.max(0.01, Number(e.target.value) || 0.01))}
+                  className="w-24 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground tabular-nums" />
+              </label>
+            ) : (
+              <label className="text-xs text-muted-foreground">
+                <div className="mb-1">Max lot</div>
+                <input type="number" min={0.01} step={0.01} value={maxLot} onChange={e => setMaxLot(Math.max(0.01, Number(e.target.value) || 0.01))}
+                  className="w-24 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground tabular-nums" />
+              </label>
+            )}
             <div className="ml-auto text-right">
               <div className="text-[11px] text-muted-foreground">Equity akhir</div>
               <div className={`text-2xl font-bold tabular-nums ${profit >= 0 ? 'text-bullish' : 'text-bearish'}`}>
