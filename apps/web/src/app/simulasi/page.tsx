@@ -34,6 +34,7 @@ const CONFIDENCE = [
 export default function SimulasiPage() {
   const [deposit, setDeposit] = useState(1000);
   const [riskPct, setRiskPct] = useState(1);
+  const [maxLot, setMaxLot] = useState(1);
   const [status, setStatus] = useState('CLOSED');
   const [verdict, setVerdict] = useState('');
   const [confIdx, setConfIdx] = useState(0);
@@ -79,29 +80,33 @@ export default function SimulasiPage() {
 
   const sim = useMemo(() => {
     if (!data?.items) return null;
-    // urut kronologis, compound
+    // urut kronologis, compound; lot = min(risk-based, maxLot); XAUUSD 1 lot = $100/point
     const trades = [...data.items].reverse().map(s => {
       const entry = Number(s.preferredEntry), sl = Number(s.stopLoss);
-      const risk = Math.abs(entry - sl);
-      if (risk === 0) return { s, r: 0 };
+      const slDist = Math.abs(entry - sl);
+      if (slDist === 0) return { s, r: 0, slDist: 0 };
       const win = s.status !== 'FAILED' && s.status !== 'STOPPED';
       let r = -1;
       if (win) {
         const tpIdx = s.status === 'TP2_HIT' ? 1 : 0;
         const tp = s.takeProfits?.[tpIdx]?.price;
-        r = tp != null ? Math.abs(Number(tp) - entry) / risk : 0;
+        r = tp != null ? Math.abs(Number(tp) - entry) / slDist : 0;
       }
-      return { s, r };
+      return { s, r, slDist };
     });
     let eq = deposit;
     const rows = trades.map(tr => {
-      const pnl = eq * (riskPct / 100) * tr.r;
+      const riskDollar = eq * (riskPct / 100);
+      const idealLot = tr.slDist > 0 ? riskDollar / (tr.slDist * 100) : 0;
+      const lot = Math.min(idealLot, maxLot);
+      const pnl = lot * tr.slDist * 100 * tr.r;
       eq += pnl;
-      return { ...tr, pnl, eqAfter: eq };
+      return { ...tr, lot, pnl, eqAfter: eq };
     });
     const wins = rows.filter(x => x.r > 0).length;
-    return { rows, n: rows.length, wins, final: eq, sumR: rows.reduce((a, x) => a + x.r, 0) };
-  }, [data, deposit, riskPct]);
+    const lotCapped = rows.filter(x => x.slDist > 0 && x.lot >= maxLot && x.lot > 0).length;
+    return { rows, n: rows.length, wins, final: eq, sumR: rows.reduce((a, x) => a + x.r, 0), lotCapped };
+  }, [data, deposit, riskPct, maxLot]);
 
   const profit = sim ? sim.final - deposit : 0;
 
@@ -176,6 +181,11 @@ export default function SimulasiPage() {
               <input type="number" min={0.1} step={0.1} value={riskPct} onChange={e => setRiskPct(Math.max(0.1, Number(e.target.value) || 0.1))}
                 className="w-28 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground tabular-nums" />
             </label>
+            <label className="text-xs text-muted-foreground">
+              <div className="mb-1">Max lot</div>
+              <input type="number" min={0.01} step={0.01} value={maxLot} onChange={e => setMaxLot(Math.max(0.01, Number(e.target.value) || 0.01))}
+                className="w-24 rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground tabular-nums" />
+            </label>
             <div className="ml-auto text-right">
               <div className="text-[11px] text-muted-foreground">Equity akhir</div>
               <div className={`text-2xl font-bold tabular-nums ${profit >= 0 ? 'text-bullish' : 'text-bearish'}`}>
@@ -191,6 +201,7 @@ export default function SimulasiPage() {
               <span>Winrate {sim.n ? Math.round((sim.wins / sim.n) * 100) : 0}%</span>
               <span>Total {sim.sumR >= 0 ? '+' : ''}{sim.sumR.toFixed(2)}R</span>
               <span>{sim.wins}W / {sim.n - sim.wins}L</span>
+              {sim.lotCapped > 0 && <span className="text-amber-500">{sim.lotCapped} trade lot capped</span>}
             </div>
           )}
         </div>
@@ -202,6 +213,7 @@ export default function SimulasiPage() {
                 <th className="text-left px-3 py-2">Time</th>
                 <th className="text-left px-3 py-2">Dir</th>
                 <th className="text-left px-3 py-2">Status</th>
+                <th className="text-right px-3 py-2">Lot</th>
                 <th className="text-right px-3 py-2">R</th>
                 <th className="text-right px-3 py-2">P/L</th>
                 <th className="text-right px-3 py-2">Equity</th>
@@ -217,6 +229,7 @@ export default function SimulasiPage() {
                   </td>
                   <td className={`px-3 py-2 font-medium ${row.s.direction === 'LONG' ? 'text-bullish' : 'text-bearish'}`}>{row.s.direction}</td>
                   <td className="px-3 py-2"><StatusBadge status={row.s.status} /></td>
+                  <td className={`px-3 py-2 text-right tabular-nums ${row.lot >= maxLot && row.lot > 0 ? 'text-amber-500 font-medium' : ''}`}>{row.lot.toFixed(2)}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${row.r >= 0 ? 'text-bullish' : 'text-bearish'}`}>{row.r >= 0 ? '+' : ''}{row.r.toFixed(2)}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${row.pnl >= 0 ? 'text-bullish' : 'text-bearish'}`}>
                     {row.pnl >= 0 ? '+' : '-'}${Math.abs(row.pnl).toLocaleString('en-US', { maximumFractionDigits: 2 })}
@@ -225,10 +238,10 @@ export default function SimulasiPage() {
                 </tr>
               ))}
               {isLoading && (
-                <tr><td colSpan={6} className="px-3 py-10 text-center text-sm text-muted-foreground">Memuat…</td></tr>
+                <tr><td colSpan={7} className="px-3 py-10 text-center text-sm text-muted-foreground">Memuat…</td></tr>
               )}
               {sim && sim.n === 0 && (
-                <tr><td colSpan={6} className="px-3 py-10 text-center text-sm text-muted-foreground">Belum ada sinyal sesuai filter</td></tr>
+                <tr><td colSpan={7} className="px-3 py-10 text-center text-sm text-muted-foreground">Belum ada sinyal sesuai filter</td></tr>
               )}
             </tbody>
           </table>
