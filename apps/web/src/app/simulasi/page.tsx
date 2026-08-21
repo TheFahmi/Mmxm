@@ -87,12 +87,30 @@ export default function SimulasiPage() {
       const entry = Number(s.preferredEntry), sl = Number(s.stopLoss);
       const slDist = Math.abs(entry - sl);
       if (slDist === 0) return { s, r: 0, slDist: 0 };
-      const win = s.status !== 'FAILED' && s.status !== 'STOPPED';
-      let r = -1;
-      if (win) {
-        const tpIdx = s.status === 'TP2_HIT' ? 1 : 0;
-        const tp = s.takeProfits?.[tpIdx]?.price;
-        r = tp != null ? Math.abs(Number(tp) - entry) / slDist : 0;
+      // R real berbasis partial close 25/25/50:
+      //   TPx_HIT  = TP itu kena lalu sisa posisi balik ke SL
+      //     -> R = w1*(tp1-e)/d + (sisa)*(−1)  [TP1: +0.25R1 − 0.75; TP2: +0.25R1 +0.25R2 − 0.5]
+      //   COMPLETED= semua TP kena -> R = 0.25R1 + 0.25R2 + 0.5R3
+      //   FAILED   = SL langsung, belum pernah TP -> −1R
+      //   STOPPED  = SL sebelum TP manapun -> −1R
+      const tpPrices = (s.takeProfits ?? []).map(t => Number(t.price)).filter(Number.isFinite);
+      const d = slDist;
+      const R = (i: number) => Math.abs(tpPrices[i] - entry) / d;
+      let r: number;
+      if (s.status === 'COMPLETED' && tpPrices.length >= 3) {
+        r = 0.25 * R(0) + 0.25 * R(1) + 0.5 * R(2);
+      } else if (s.status === 'COMPLETED') {
+        // COMPLETED tanpa 3 TP lengkap: pakai TP tertinggi yang ada sebagai full close
+        const last = tpPrices[tpPrices.length - 1] ?? entry;
+        r = Math.abs(last - entry) / d;
+      } else if (s.status === 'TP2_HIT' && tpPrices.length >= 2) {
+        r = 0.25 * R(0) + 0.25 * R(1) - 0.5;
+      } else if (s.status === 'TP1_HIT' && tpPrices.length >= 1) {
+        r = 0.25 * R(0) - 0.75;
+      } else if (s.status === 'FAILED' || s.status === 'STOPPED') {
+        r = -1;
+      } else {
+        r = 0;
       }
       return { s, r, slDist };
     });
@@ -105,6 +123,7 @@ export default function SimulasiPage() {
       eq += pnl;
       return { ...tr, lot, pnl, eqAfter: eq };
     });
+    // W/L: win = R > 0 (TPx_HIT dengan partial profit tetap bisa win/lose sesuai net R)
     const wins = rows.filter(x => x.r > 0).length;
     const lotCapped = fixedMode
       ? 0
