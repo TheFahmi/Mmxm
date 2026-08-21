@@ -6,6 +6,9 @@ import { apiGet } from '@/lib/api';
 import { Nav } from '@/components/nav';
 import { StatusBadge } from '@/components/ui';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
+
+const EquityChart = dynamic(() => import('@/components/equity-chart'), { ssr: false, loading: () => <div className="h-56 animate-pulse bg-muted/40 rounded-lg" /> });
 
 interface SignalRow {
   id: string;
@@ -40,6 +43,10 @@ export default function SimulasiPage() {
   const [status, setStatus] = useState('CLOSED');
   const [verdict, setVerdict] = useState('');
   const [confIdx, setConfIdx] = useState(0);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [sortKey, setSortKey] = useState('time');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const { data, isLoading } = useQuery<SignalListResponse>({
     queryKey: ['signals', 'sim', status, verdict, confIdx],
@@ -82,8 +89,12 @@ export default function SimulasiPage() {
 
   const sim = useMemo(() => {
     if (!data?.items) return null;
+    // filter tanggal dulu (client-side) — sim dihitung dari periode terpilih
+    let items = data.items;
+    if (fromDate) items = items.filter(s => s.detectedAt.slice(0, 10) >= fromDate);
+    if (toDate) items = items.filter(s => s.detectedAt.slice(0, 10) <= toDate);
     // urut kronologis, compound; lot = min(risk-based, maxLot); XAUUSD 1 lot = $100/point
-    const trades = [...data.items].reverse().map(s => {
+    const trades = [...items].reverse().map(s => {
       const entry = Number(s.preferredEntry), sl = Number(s.stopLoss);
       const slDist = Math.abs(entry - sl);
       if (slDist === 0) return { s, r: 0, slDist: 0 };
@@ -128,8 +139,56 @@ export default function SimulasiPage() {
     const lotCapped = fixedMode
       ? 0
       : rows.filter(x => x.slDist > 0 && x.lot >= maxLot && x.lot > 0).length;
-    return { rows, n: rows.length, wins, final: eq, sumR: rows.reduce((a, x) => a + x.r, 0), lotCapped };
-  }, [data, deposit, riskPct, maxLot, fixedMode, fixedLot]);
+
+    // Drawdown: peak-to-trough dari equity berjalan
+    let peak = deposit;
+    let maxDD = 0;
+    let maxDDPct = 0;
+    let currentDD = 0;
+    let currentDDPct = 0;
+    for (const row of rows) {
+      if (row.eqAfter > peak) peak = row.eqAfter;
+      const dd = peak - row.eqAfter;
+      const ddPct = peak > 0 ? (dd / peak) * 100 : 0;
+      if (dd > maxDD) maxDD = dd;
+      if (ddPct > maxDDPct) maxDDPct = ddPct;
+      currentDD = dd;
+      currentDDPct = ddPct;
+    }
+
+    // Equity points untuk chart (kronologis)
+    const equityPoints = rows.map(row => ({
+      time: row.s.detectedAt,
+      value: row.eqAfter,
+    }));
+
+    return {
+      rows, n: rows.length, wins, final: eq, sumR: rows.reduce((a, x) => a + x.r, 0), lotCapped,
+      maxDD, maxDDPct, currentDD, currentDDPct, equityPoints,
+    };
+  }, [data, deposit, riskPct, maxLot, fixedMode, fixedLot, fromDate, toDate]);
+
+  // Sort (client-side, hanya tampilan tabel — sim tidak terpengaruh)
+  const visibleRows = useMemo(() => {
+    if (!sim) return [];
+    const rows = [...sim.rows];
+    const dir = sortDir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => {
+      switch (sortKey) {
+        case 'lot': return (a.lot - b.lot) * dir;
+        case 'r': return (a.r - b.r) * dir;
+        case 'pnl': return (a.pnl - b.pnl) * dir;
+        case 'equity': return (a.eqAfter - b.eqAfter) * dir;
+        default: return (new Date(a.s.detectedAt).getTime() - new Date(b.s.detectedAt).getTime()) * dir;
+      }
+    });
+    return rows;
+  }, [sim, sortKey, sortDir]);
+
+  const toggleSort = (key: string) => {
+    if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortKey(key); setSortDir('desc'); }
+  };
 
   const profit = sim ? sim.final - deposit : 0;
 
@@ -190,6 +249,19 @@ export default function SimulasiPage() {
               ))}
             </div>
           </div>
+
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="whitespace-nowrap">Dari</span>
+            <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+              className="bg-background border border-border rounded px-2 py-1 text-sm" />
+            <span className="whitespace-nowrap">Sampai</span>
+            <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+              className="bg-background border border-border rounded px-2 py-1 text-sm" />
+            {(fromDate || toDate) && (
+              <button onClick={() => { setFromDate(''); setToDate(''); }}
+                className="text-xs text-amber-500 hover:underline">Reset</button>
+            )}
+          </div>
         </div>
 
         <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -249,25 +321,33 @@ export default function SimulasiPage() {
               <span>Total {sim.sumR >= 0 ? '+' : ''}{sim.sumR.toFixed(2)}R</span>
               <span>{sim.wins}W / {sim.n - sim.wins}L</span>
               {sim.lotCapped > 0 && <span className="text-amber-500">{sim.lotCapped} trade lot capped</span>}
+              <span className="text-bearish">Max DD ${sim.maxDD.toLocaleString('en-US', { maximumFractionDigits: 0 })} ({sim.maxDDPct.toFixed(1)}%)</span>
+              {sim.currentDD > 0 && (
+                <span className="text-bearish/70">DD sekarang ${sim.currentDD.toLocaleString('en-US', { maximumFractionDigits: 0 })} ({sim.currentDDPct.toFixed(1)}%)</span>
+              )}
             </div>
           )}
         </div>
+
+        {sim && sim.equityPoints.length > 1 && (
+          <EquityChart points={sim.equityPoints} baseline={deposit} />
+        )}
 
         <div className="rounded-lg border border-border overflow-x-auto">
           <table className="w-full text-sm whitespace-nowrap">
             <thead className="bg-muted/60 text-muted-foreground">
               <tr>
-                <th className="text-left px-3 py-2">Time</th>
+                <th className="text-left px-3 py-2"><button onClick={() => toggleSort('time')} className="hover:text-foreground">Time {sortKey === 'time' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button></th>
                 <th className="text-left px-3 py-2">Dir</th>
                 <th className="text-left px-3 py-2">Status</th>
-                <th className="text-right px-3 py-2">Lot</th>
-                <th className="text-right px-3 py-2">R</th>
-                <th className="text-right px-3 py-2">P/L</th>
-                <th className="text-right px-3 py-2">Equity</th>
+                <th className="text-right px-3 py-2"><button onClick={() => toggleSort('lot')} className="hover:text-foreground">Lot {sortKey === 'lot' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button></th>
+                <th className="text-right px-3 py-2"><button onClick={() => toggleSort('r')} className="hover:text-foreground">R {sortKey === 'r' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button></th>
+                <th className="text-right px-3 py-2"><button onClick={() => toggleSort('pnl')} className="hover:text-foreground">P/L {sortKey === 'pnl' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button></th>
+                <th className="text-right px-3 py-2"><button onClick={() => toggleSort('equity')} className="hover:text-foreground">Equity {sortKey === 'equity' ? (sortDir === 'asc' ? '↑' : '↓') : ''}</button></th>
               </tr>
             </thead>
             <tbody>
-              {sim?.rows.slice().reverse().map((row, i) => (
+              {visibleRows.map((row, i) => (
                 <tr key={`${row.s.id}-${i}`} className="border-t border-border hover:bg-muted/30">
                   <td className="px-3 py-2">
                     <Link href={`/signals/${row.s.id}`} className="hover:underline">
