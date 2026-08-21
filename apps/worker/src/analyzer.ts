@@ -84,9 +84,9 @@ export async function runAnalysis(
 
   if (!sig) {
     logger.debug({ why: out.debug.why, failed: out.debug.failed }, 'no signal (rule engine)');
-    // LLM-first fallback: DeepSeek detects a setup from the same candles.
+    // LLM-first fallback: DeepSeek detects setup same candles.
     const llmSig = await detectSignalWithLlm(
-      m15.slice(-20).map(c => ({
+      m15.slice(-12).map(c => ({ // reduce from 20 to 12 candles (3h vs 5h)
         openTime: c.openTime,
         open: c.open, high: c.high, low: c.low, close: c.close,
       })),
@@ -100,8 +100,8 @@ export async function runAnalysis(
           direction: 'NONE',
           summary: llmSig.summary ?? 'No valid setup',
           reasons: (llmSig.reasons ?? []).map(r => ({ code: r.code, description: r.description })),
-          entry: llmSig.entry ?? null,
-          stopLoss: llmSig.stopLoss ?? null,
+          entry: llmSig.entry && llmSig.entry > 0 ? llmSig.entry : null,
+          stopLoss: llmSig.stopLoss && llmSig.stopLoss > 0 ? llmSig.stopLoss : null,
         });
       }
       return null;
@@ -125,7 +125,8 @@ export async function runAnalysis(
       takeProfits: llmSig.takeProfits.slice(0, 3).map((tp, i) => ({
         level: (i + 1) as 1 | 2 | 3,
         price: tp,
-        allocationPercentage: Math.max(10, 100 - i * 25),
+        // % POSISI YANG DI-CLOSE di level ini: TP1=25%, TP2=25%, TP3=sisa 50%
+        allocationPercentage: i === 0 ? 25 : i === 1 ? 25 : 50,
         liquidityTarget: 'LLM',
       })),
       riskRewardRatio: risk > 0 && llmSig.takeProfits[0] != null
@@ -191,15 +192,53 @@ export async function runAnalysis(
   });
   if (lastSameDir) {
     const ageMs = Date.now() - new Date(lastSameDir.detectedAt).getTime();
-    const cooldownMs = 90 * 60 * 1000; // 90 menit
+    const cooldownMs = 30 * 60 * 1000; // 30 menit
     const isHighConf = sig.confidenceScore >= 90;
-    if (ageMs < cooldownMs && !isHighConf) {
+    const isClosed = ['STOPPED', 'COMPLETED', 'INVALIDATED', 'EXPIRED'].includes(lastSameDir.status);
+    // closed signal → next one allowed immediately (no cooldown block)
+    if (!isClosed && ageMs < cooldownMs && !isHighConf) {
       logger.info(
         { ageMins: Math.round(ageMs / 60000), lastId: lastSameDir.id, lastConf: lastSameDir.confidence, newConf: sig.confidenceScore },
         'signal throttled (same direction cooldown 90m, conf <90)',
       );
       return null;
     }
+  }
+
+  // Hanya satu posisi open pada satu waktu: kalau ada signal arah LAWAN yang masih open,
+  // tapi jika confidence baru > confidence lawan → biarkan (conviction lebih kuat).
+  // TPx_HIT sudah closed (partial profit) — jangan dianggap open/antri
+  const openSameDir = await prisma.signal.findFirst({
+    where: {
+      canonicalSymbol: 'XAUUSD',
+      direction: sig.direction,
+      status: { in: ['WATCHING', 'PRELIMINARY', 'CONFIRMED', 'ACTIVE'] },
+    },
+    orderBy: { detectedAt: 'desc' },
+  });
+  if (openSameDir) {
+    logger.info(
+      { openId: openSameDir.id, openDir: openSameDir.direction, openConf: openSameDir.confidence, newConf: sig.confidenceScore },
+      'same-direction position open, skipping (anti-duplicate)',
+    );
+    return null;
+  }
+
+  const openOpposite = await prisma.signal.findFirst({
+    where: {
+      canonicalSymbol: 'XAUUSD',
+      direction: sig.direction === 'LONG' ? 'SHORT' : 'LONG',
+      status: { in: ['WATCHING', 'PRELIMINARY', 'CONFIRMED', 'ACTIVE'] },
+    },
+    orderBy: { detectedAt: 'desc' },
+  });
+  if (openOpposite) {
+    const oppositeConf = openOpposite.confidence ?? 0;
+    if (sig.confidenceScore <= oppositeConf) {
+      logger.info({ openId: openOpposite.id, openDir: openOpposite.direction, openConf: oppositeConf, newDir: sig.direction, newConf: sig.confidenceScore }, 'opposite position open, skipping (anti-hedge: new conf not higher)');
+      return null;
+    }
+    logger.info({ openId: openOpposite.id, openDir: openOpposite.direction, openConf: oppositeConf, newDir: sig.direction, newConf: sig.confidenceScore }, 'opposite position overridden (new conf higher)');
   }
 
   if (!versionId) {

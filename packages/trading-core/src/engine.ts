@@ -216,7 +216,8 @@ export function analyze(input: MmxmAnalysisInput, strategyVersion: string): Engi
   const tps = opposing.slice(0, 3).map((l, i) => ({
     level: (i + 1) as 1 | 2 | 3,
     price: l.price,
-    allocationPercentage: i === 0 ? 50 : i === 1 ? 30 : 20,
+    // % posisi yang di-close di level ini: TP1=25%, TP2=25%, TP3=sisa 50%
+    allocationPercentage: i === 0 ? 25 : i === 1 ? 25 : 50,
     liquidityTarget: l.type,
   }));
   if (!tps.length) {
